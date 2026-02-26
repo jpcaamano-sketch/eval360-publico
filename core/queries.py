@@ -162,26 +162,21 @@ def contar_grupos_por_plantilla(plantilla_id):
 
 @con_reintento
 def listar_grupos():
-    """Lista todos los grupos con info de plantilla."""
+    """Lista todos los grupos con info de plantilla (1 sola query con join)."""
     sb = get_client()
-    grupos = sb.table("v2_grupos").select("*").order("created_at", desc=True).execute().data
-    for g in grupos:
-        p_res = sb.table("v2_plantillas").select("nombre").eq("id", g["plantilla_id"]).execute()
-        g["v2_plantillas"] = p_res.data[0] if p_res.data else None
-    return grupos
+    return sb.table("v2_grupos").select(
+        "*, v2_plantillas(nombre)"
+    ).order("created_at", desc=True).execute().data or []
 
 
 @con_reintento
 def obtener_grupo(grupo_id):
-    """Obtiene un grupo por ID."""
+    """Obtiene un grupo por ID con info de plantilla (1 sola query con join)."""
     sb = get_client()
-    res = sb.table("v2_grupos").select("*").eq("id", grupo_id).execute()
-    if not res.data:
-        return None
-    grupo = res.data[0]
-    p_res = sb.table("v2_plantillas").select("nombre").eq("id", grupo["plantilla_id"]).execute()
-    grupo["v2_plantillas"] = p_res.data[0] if p_res.data else None
-    return grupo
+    res = sb.table("v2_grupos").select(
+        "*, v2_plantillas(nombre)"
+    ).eq("id", grupo_id).execute()
+    return res.data[0] if res.data else None
 
 
 @con_reintento
