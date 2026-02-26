@@ -376,3 +376,21 @@ def obtener_respuestas_participante(participante_id):
     return sb.table("v2_respuestas").select("*").eq(
         "participante_id", participante_id
     ).execute().data
+
+
+@con_reintento
+def eliminar_respuestas_auto(participante_id):
+    """Elimina todas las respuestas de autoevaluación de un participante."""
+    sb = get_client()
+    return sb.table("v2_respuestas").delete().eq(
+        "participante_id", participante_id
+    ).eq("es_autoevaluacion", True).execute()
+
+
+@con_reintento
+def eliminar_respuestas_feedback(participante_id, evaluador_id):
+    """Elimina respuestas de feedback de un evaluador para un participante."""
+    sb = get_client()
+    return sb.table("v2_respuestas").delete().eq(
+        "participante_id", participante_id
+    ).eq("evaluador_id", evaluador_id).execute()
