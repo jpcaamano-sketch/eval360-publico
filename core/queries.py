@@ -180,12 +180,13 @@ def obtener_grupo(grupo_id):
 
 
 @con_reintento
-def crear_grupo(nombre, plantilla_id):
+def crear_grupo(nombre, plantilla_id, empresa=""):
     """Crea un nuevo grupo."""
     sb = get_client()
     return sb.table("v2_grupos").insert({
         "nombre": nombre,
         "plantilla_id": plantilla_id,
+        "empresa": empresa,
     }).execute().data[0]
 
 
