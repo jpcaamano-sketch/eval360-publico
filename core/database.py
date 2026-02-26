@@ -1,10 +1,12 @@
 """Conexión a Supabase."""
 
+from __future__ import annotations
 import time
+from typing import Optional
 from supabase import create_client, Client
 from core.config import SUPABASE_URL, SUPABASE_KEY
 
-_client: Client | None = None
+_client: Optional[Client] = None
 
 
 def get_client() -> Client:
