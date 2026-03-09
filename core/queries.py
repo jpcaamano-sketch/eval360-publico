@@ -141,7 +141,7 @@ def listar_competencias(categoria_id):
 
 @con_reintento
 def listar_competencias_por_plantilla(plantilla_id):
-    """Lista todas las competencias de una plantilla con su categoría."""
+    """Lista todas las competencias de una plantilla ordenadas globalmente por orden."""
     categorias = listar_categorias(plantilla_id)
     resultado = []
     for cat in categorias:
@@ -149,7 +149,7 @@ def listar_competencias_por_plantilla(plantilla_id):
         for comp in comps:
             comp["categoria_nombre"] = cat["nombre"]
         resultado.extend(comps)
-    return resultado
+    return sorted(resultado, key=lambda c: c.get("orden", 0))
 
 
 @con_reintento
