@@ -23,7 +23,7 @@ ESCALA_OPCIONES = list(ESCALA.values())
 token = st.query_params.get("token")
 
 if not token:
-    st.title("Evaluación 360° — Feedback")
+    pass  # titulo removido
     st.warning("Acceso no válido. Utiliza el enlace que recibiste por email.")
     st.stop()
 
@@ -34,12 +34,12 @@ if not token:
 evaluador = queries.obtener_evaluador_por_token(token)
 
 if not evaluador:
-    st.title("Evaluación 360° — Feedback")
+    pass  # titulo removido
     st.error("Token no válido o expirado.")
     st.stop()
 
 if evaluador["completado"]:
-    st.title("Evaluación 360° — Feedback")
+    pass  # titulo removido
     st.success(f"¡Gracias, {evaluador['nombre']}! Tu evaluación ya fue completada.")
     st.balloons()
     st.stop()
@@ -68,7 +68,7 @@ if not competencias:
 # FORMULARIO TIPO TABLA
 # ============================================================
 
-st.title("Evaluación 360° — Feedback")
+
 st.markdown(f"**Hola, {evaluador['nombre']}**")
 st.markdown(f"Estás evaluando a **{participante_nombre}**. Tu feedback es **anónimo**.")
 st.markdown("Responde según la frecuencia con la que observas la conducta.")
