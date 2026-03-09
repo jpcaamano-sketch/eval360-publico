@@ -22,7 +22,7 @@ ESCALA_OPCIONES = list(ESCALA.values())  # ["Nunca", "Rara vez", "A veces", "Fre
 token = st.query_params.get("token")
 
 if not token:
-    st.title("Autoevaluación 360°")
+    pass  # titulo removido
     st.warning("Acceso no válido. Utiliza el enlace que recibiste por email.")
     st.stop()
 
@@ -33,12 +33,12 @@ if not token:
 participante = queries.obtener_participante_por_token(token)
 
 if not participante:
-    st.title("Autoevaluación 360°")
+    pass  # titulo removido
     st.error("Token no válido o expirado.")
     st.stop()
 
 if participante["autoevaluacion_completada"]:
-    st.title("Autoevaluación 360°")
+    pass  # titulo removido
     st.success(f"¡Gracias, {participante.get('nombre', '')}! Tu autoevaluación ya fue completada.")
     st.balloons()
     st.stop()
@@ -64,7 +64,7 @@ if not competencias:
 # FORMULARIO TIPO TABLA
 # ============================================================
 
-st.title("Autoevaluación 360°")
+
 st.markdown(f"**Hola, {participante.get('nombre', '')}**")
 st.markdown("Responde cada afirmación según la frecuencia con la que aplica a ti.")
 st.divider()
