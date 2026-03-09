@@ -1,12 +1,10 @@
 """Conexión a Supabase."""
 
-from __future__ import annotations
 import time
-from typing import Optional
 from supabase import create_client, Client
 from core.config import SUPABASE_URL, SUPABASE_KEY
 
-_client: Optional[Client] = None
+_client: Client | None = None
 
 
 def get_client() -> Client:
@@ -24,15 +22,24 @@ def reset_client():
 
 
 def ejecutar_con_reintento(fn, max_intentos=3):
-    """Ejecuta una función con reintentos ante errores de conexión."""
+    """Ejecuta una función con reintentos ante errores de conexión o 500 de Supabase."""
     for intento in range(max_intentos):
         try:
             return fn()
         except Exception as e:
             err_str = str(e).lower()
-            if "ssl" in err_str or "eof" in err_str or "disconnect" in err_str or "remote" in err_str:
+            transient = (
+                "ssl" in err_str
+                or "eof" in err_str
+                or "disconnect" in err_str
+                or "remote" in err_str
+                or "500" in err_str
+                or "cloudflare" in err_str
+                or "json could not be generated" in err_str
+            )
+            if transient:
                 reset_client()
                 if intento < max_intentos - 1:
-                    time.sleep(1)
+                    time.sleep(1.5)
                     continue
             raise
