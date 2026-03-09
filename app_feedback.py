@@ -74,10 +74,8 @@ st.markdown(f"Estás evaluando a **{participante_nombre}**. Tu feedback es **an�
 st.markdown("Responde según la frecuencia con la que observas la conducta.")
 st.divider()
 
-# Mismo orden aleatorio que autoevaluación (seed = participante_id)
-random.seed(participante_id)
+# Orden fijo según plantilla
 competencias_shuffle = list(competencias)
-random.shuffle(competencias_shuffle)
 
 # Cabecera de tabla
 hc = st.columns([0.4, 3.5, 0.9, 0.9, 0.9, 1.2, 0.9])
