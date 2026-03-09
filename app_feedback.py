@@ -69,6 +69,7 @@ if not competencias:
 # ============================================================
 
 
+st.title("Feedback 360°")
 st.markdown(f"**Hola, {evaluador['nombre']}**")
 st.markdown(f"Estás evaluando a **{participante_nombre}**. Tu feedback es **anónimo**.")
 st.markdown("Responde según la frecuencia con la que observas la conducta.")
