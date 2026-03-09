@@ -13,6 +13,36 @@ def con_reintento(fn):
 
 
 # ============================================================
+# HELPERS DE ENRIQUECIMIENTO
+# ============================================================
+
+def _enriquecer_participante(p):
+    """Añade nombre/email virtuales desde sist_personas para compatibilidad."""
+    sp = p.pop("sist_personas", None) or {}
+    p["pers_nombres"] = sp.get("pers_nombres", "")
+    p["pers_apellidos"] = sp.get("pers_apellidos", "")
+    p["pers_correo"] = sp.get("pers_correo") or ""
+    nombres = p["pers_nombres"]
+    apellidos = p["pers_apellidos"]
+    p["nombre"] = f"{nombres} {apellidos}".strip() or p.get("pers_rut") or "—"
+    p["email"] = p["pers_correo"]
+    return p
+
+
+def _enriquecer_grupo(g, empresa_map=None):
+    """Añade empresa virtual desde otec_empresas para compatibilidad."""
+    # Limpia el join embebido si existiera (ignorado)
+    g.pop("otec_empresas", None)
+    if empresa_map:
+        nombre_emp = empresa_map.get(g.get("rut_empresa") or "", "") or ""
+    else:
+        nombre_emp = ""
+    g["empresa_nombre"] = nombre_emp
+    g["empresa"] = nombre_emp
+    return g
+
+
+# ============================================================
 # PLANTILLAS
 # ============================================================
 
@@ -149,6 +179,68 @@ def eliminar_competencia(competencia_id):
 
 
 # ============================================================
+# PERSONAS (sist_personas) y EMPRESAS (otec_empresas)
+# ============================================================
+
+@con_reintento
+def listar_empresas_otec():
+    """Lista todas las empresas de otec_empresas ordenadas por nombre."""
+    sb = get_client()
+    return sb.table("otec_empresas").select(
+        "rut_empresa, nombre_empresa"
+    ).order("nombre_empresa").execute().data or []
+
+
+@con_reintento
+def listar_personas_sist(rut_empresa=None, solo_con_correo=True):
+    """Lista personas de sist_personas.
+    Si rut_empresa se pasa, filtra por esa empresa.
+    Si solo_con_correo=True (default), excluye personas sin correo."""
+    sb = get_client()
+    q = sb.table("sist_personas").select(
+        "pers_rut, pers_nombres, pers_apellidos, pers_correo, rut_empresa"
+    )
+    if rut_empresa:
+        q = q.eq("rut_empresa", rut_empresa)
+    res = q.order("pers_apellidos").execute().data or []
+    if solo_con_correo:
+        return [p for p in res if p.get("pers_correo")]
+    return res
+
+
+@con_reintento
+def crear_persona_sist(pers_rut, nombres, apellidos, correo, rut_empresa=None):
+    """Crea o actualiza una persona en sist_personas."""
+    sb = get_client()
+    datos = {
+        "pers_rut": pers_rut,
+        "pers_nombres": nombres,
+        "pers_apellidos": apellidos,
+        "pers_correo": correo,
+    }
+    if rut_empresa:
+        datos["rut_empresa"] = rut_empresa
+    return sb.table("sist_personas").upsert(datos, on_conflict="pers_rut").execute()
+
+
+@con_reintento
+def buscar_persona_por_correo(correo):
+    """Busca una persona en sist_personas por correo electrónico."""
+    sb = get_client()
+    res = sb.table("sist_personas").select(
+        "pers_rut, pers_nombres, pers_apellidos, pers_correo"
+    ).eq("pers_correo", correo).limit(1).execute()
+    return res.data[0] if res.data else None
+
+
+@con_reintento
+def actualizar_persona_sist(pers_rut, datos):
+    """Actualiza datos de una persona en sist_personas."""
+    sb = get_client()
+    return sb.table("sist_personas").update(datos).eq("pers_rut", pers_rut).execute()
+
+
+# ============================================================
 # GRUPOS
 # ============================================================
 
@@ -162,31 +254,47 @@ def contar_grupos_por_plantilla(plantilla_id):
 
 @con_reintento
 def listar_grupos():
-    """Lista todos los grupos con info de plantilla (1 sola query con join)."""
+    """Lista todos los grupos con info de plantilla y empresa."""
     sb = get_client()
-    return sb.table("v2_grupos").select(
+    res = sb.table("v2_grupos").select(
         "*, v2_plantillas(nombre)"
-    ).order("created_at", desc=True).execute().data or []
+    ).order("created_at", desc=True).execute()
+    grupos = res.data or []
+    if grupos:
+        emp_res = sb.table("otec_empresas").select("rut_empresa, nombre_empresa").execute()
+        empresa_map = {e["rut_empresa"]: e["nombre_empresa"] for e in (emp_res.data or [])}
+        return [_enriquecer_grupo(g, empresa_map) for g in grupos]
+    return grupos
 
 
 @con_reintento
 def obtener_grupo(grupo_id):
-    """Obtiene un grupo por ID con info de plantilla (1 sola query con join)."""
+    """Obtiene un grupo por ID con info de plantilla y empresa."""
     sb = get_client()
     res = sb.table("v2_grupos").select(
         "*, v2_plantillas(nombre)"
     ).eq("id", grupo_id).execute()
-    return res.data[0] if res.data else None
+    if not res.data:
+        return None
+    g = res.data[0]
+    rut = g.get("rut_empresa") or ""
+    nombre_emp = ""
+    if rut:
+        emp_res = sb.table("otec_empresas").select("nombre_empresa").eq("rut_empresa", rut).execute()
+        nombre_emp = emp_res.data[0]["nombre_empresa"] if emp_res.data else ""
+    g["empresa_nombre"] = nombre_emp
+    g["empresa"] = nombre_emp
+    return g
 
 
 @con_reintento
-def crear_grupo(nombre, plantilla_id, empresa=""):
+def crear_grupo(nombre, plantilla_id, rut_empresa=None):
     """Crea un nuevo grupo."""
     sb = get_client()
     return sb.table("v2_grupos").insert({
         "nombre": nombre,
         "plantilla_id": plantilla_id,
-        "empresa": empresa,
+        "rut_empresa": rut_empresa,
     }).execute().data[0]
 
 
@@ -210,21 +318,25 @@ def eliminar_grupo(grupo_id):
 
 @con_reintento
 def listar_participantes(grupo_id):
-    """Lista participantes de un grupo."""
+    """Lista participantes de un grupo con datos de sist_personas."""
     sb = get_client()
-    return sb.table("v2_participantes").select("*").eq(
-        "grupo_id", grupo_id
-    ).order("correlativo").execute().data
+    res = sb.table("v2_participantes").select(
+        "*, sist_personas(pers_nombres, pers_apellidos, pers_correo)"
+    ).eq("grupo_id", grupo_id).execute()
+    participantes = [_enriquecer_participante(p) for p in (res.data or [])]
+    return sorted(participantes, key=lambda p: p.get("pers_apellidos", "").lower())
 
 
 @con_reintento
 def obtener_participante_por_token(token):
-    """Obtiene un participante por su token de autoevaluación, con datos del grupo."""
+    """Obtiene un participante por su token de autoevaluación, con datos del grupo y sist_personas."""
     sb = get_client()
-    res = sb.table("v2_participantes").select("*").eq("token_auto", token).execute()
+    res = sb.table("v2_participantes").select(
+        "*, sist_personas(pers_nombres, pers_apellidos, pers_correo)"
+    ).eq("token_auto", token).execute()
     if not res.data:
         return None
-    participante = res.data[0]
+    participante = _enriquecer_participante(res.data[0])
     grupo_res = sb.table("v2_grupos").select("*").eq("id", participante["grupo_id"]).execute()
     if grupo_res.data:
         participante["v2_grupos"] = grupo_res.data[0]
@@ -232,13 +344,12 @@ def obtener_participante_por_token(token):
 
 
 @con_reintento
-def crear_participante(grupo_id, nombre, email):
-    """Crea un participante."""
+def crear_participante(grupo_id, pers_rut):
+    """Crea un participante vinculado a sist_personas por pers_rut."""
     sb = get_client()
     return sb.table("v2_participantes").insert({
         "grupo_id": grupo_id,
-        "nombre": nombre,
-        "email": email,
+        "pers_rut": pers_rut,
     }).execute().data[0]
 
 
@@ -292,9 +403,11 @@ def obtener_evaluador_por_token(token):
     if not res.data:
         return None
     evaluador = res.data[0]
-    part_res = sb.table("v2_participantes").select("*").eq("id", evaluador["participante_id"]).execute()
+    part_res = sb.table("v2_participantes").select(
+        "*, sist_personas(pers_nombres, pers_apellidos, pers_correo)"
+    ).eq("id", evaluador["participante_id"]).execute()
     if part_res.data:
-        participante = part_res.data[0]
+        participante = _enriquecer_participante(part_res.data[0])
         grupo_res = sb.table("v2_grupos").select("*").eq("id", participante["grupo_id"]).execute()
         if grupo_res.data:
             participante["v2_grupos"] = grupo_res.data[0]
@@ -303,14 +416,17 @@ def obtener_evaluador_por_token(token):
 
 
 @con_reintento
-def crear_evaluador(participante_id, nombre, email):
-    """Crea un evaluador."""
+def crear_evaluador(participante_id, nombre, email, pers_rut=None):
+    """Crea un evaluador. pers_rut opcional: se vincula a sist_personas si se conoce."""
     sb = get_client()
-    return sb.table("v2_evaluadores").insert({
+    datos = {
         "participante_id": participante_id,
         "nombre": nombre,
         "email": email,
-    }).execute().data[0]
+    }
+    if pers_rut:
+        datos["pers_rut"] = pers_rut
+    return sb.table("v2_evaluadores").insert(datos).execute().data[0]
 
 
 @con_reintento
