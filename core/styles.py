@@ -45,9 +45,18 @@ AUTO_CSS = """
     }
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
+    header {
+        background-color: #e8f4f8 !important;
+        border-bottom: none !important;
+        box-shadow: none !important;
+    }
+    [data-testid="stToolbar"]        { visibility: hidden !important; }
+    [data-testid="stToolbarActions"] { visibility: hidden !important; }
+    [data-testid="stDecoration"]     { display: none !important; }
+    [data-testid="stStatusWidget"]   { display: none !important; }
     .block-container {
         max-width: 900px;
-        padding-top: 2rem;
+        padding-top: 1rem;
     }
 """ + EVAL_TABLE_CSS + """
 </style>
@@ -60,9 +69,18 @@ FEEDBACK_CSS = """
     }
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
+    header {
+        background-color: #f0f8e8 !important;
+        border-bottom: none !important;
+        box-shadow: none !important;
+    }
+    [data-testid="stToolbar"]        { visibility: hidden !important; }
+    [data-testid="stToolbarActions"] { visibility: hidden !important; }
+    [data-testid="stDecoration"]     { display: none !important; }
+    [data-testid="stStatusWidget"]   { display: none !important; }
     .block-container {
         max-width: 900px;
-        padding-top: 2rem;
+        padding-top: 1rem;
     }
 """ + EVAL_TABLE_CSS + """
 </style>
