@@ -56,7 +56,7 @@ AUTO_CSS = """
     [data-testid="stStatusWidget"]   { display: none !important; }
     .block-container {
         max-width: 900px;
-        padding-top: 1rem;
+        padding-top: 3rem;
     }
 """ + EVAL_TABLE_CSS + """
 </style>
@@ -80,7 +80,7 @@ FEEDBACK_CSS = """
     [data-testid="stStatusWidget"]   { display: none !important; }
     .block-container {
         max-width: 900px;
-        padding-top: 1rem;
+        padding-top: 3rem;
     }
 """ + EVAL_TABLE_CSS + """
 </style>
