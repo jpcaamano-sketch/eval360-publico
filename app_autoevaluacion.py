@@ -69,10 +69,8 @@ st.markdown(f"**Hola, {participante.get('nombre', '')}**")
 st.markdown("Responde cada afirmación según la frecuencia con la que aplica a ti.")
 st.divider()
 
-# Orden aleatorio con seed del participante (mismo orden que feedback)
-random.seed(participante["id"])
+# Orden fijo según plantilla
 competencias_shuffle = list(competencias)
-random.shuffle(competencias_shuffle)
 
 # Cabecera de tabla
 hc = st.columns([0.4, 3.5, 0.9, 0.9, 0.9, 1.2, 0.9])
