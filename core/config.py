@@ -18,8 +18,8 @@ SMTP_PASSWORD = _s("SMTP_PASSWORD", "")
 
 GOOGLE_API_KEY = _s("GOOGLE_API_KEY", "")
 
-APP_AUTO_URL     = _s("APP_AUTO_URL", "https://eval360-yocreo.streamlit.app")
-APP_FEEDBACK_URL = _s("APP_FEEDBACK_URL", "https://eval360-yocreo.streamlit.app")
+APP_AUTO_URL     = _s("APP_AUTO_URL", "https://eval360-autoevaluacion.streamlit.app")
+APP_FEEDBACK_URL = _s("APP_FEEDBACK_URL", "https://eval360-feedback.streamlit.app")
 
 ESCALA = {
     1: "Nunca",
