@@ -34,6 +34,7 @@ st.markdown(ADMIN_CSS, unsafe_allow_html=True)
 
 MENU_OPTIONS = [
     "Inicio",
+    "Mantenedores",
     "Ingreso Encuestas",
     "Ingreso Participantes",
     "Seguimiento Autoevaluaciones",
@@ -55,9 +56,6 @@ with st.sidebar:
     )
 
     st.divider()
-    if st.button("Cerrar Sesión", use_container_width=True):
-        st.session_state.clear()
-        st.rerun()
 
 # JS: colorea el último ítem del radio (Ingresar Evaluadores) en ámbar
 components.html("""
@@ -336,30 +334,112 @@ def pagina_grupos():
 
     st.header("Ingreso Participantes")
 
-    tab_lista, tab_nuevo, tab_csv = st.tabs(["Grupos existentes", "Crear nuevo", "Importar desde CSV"])
+    tab_lista, tab_nuevo, tab_agregar = st.tabs(["Grupos existentes", "Crear nuevo", "Agregar Participante"])
 
     with tab_nuevo:
-        plantillas = sorted(queries.listar_plantillas(solo_activas=True), key=lambda p: (p["nombre"] or "").lower())
-        if not plantillas:
+        import pandas as pd
+        plantillas_n = sorted(queries.listar_plantillas(solo_activas=True), key=lambda p: (p["nombre"] or "").lower())
+        empresas_otec_n = queries.listar_empresas_otec()
+
+        if not plantillas_n:
             st.warning("Primero crea una plantilla antes de crear un grupo.")
-            return
-        with st.form("nuevo_grupo"):
-            empresa = st.text_input("Empresa")
-            nombre = st.text_input("Nombre del grupo")
-            plantilla_sel = st.selectbox(
-                "Plantilla",
-                options=plantillas,
-                format_func=lambda p: p["nombre"],
-            )
-            if st.form_submit_button("Crear Grupo", use_container_width=True):
-                if not empresa.strip():
-                    st.warning("Ingresa el nombre de la empresa")
-                elif not nombre.strip():
-                    st.warning("Ingresa un nombre de grupo")
+        elif not empresas_otec_n:
+            st.warning("No hay empresas registradas. Crea una en Gestión OTEC primero.")
+        else:
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                empresa_sel_n = st.selectbox(
+                    "Empresa",
+                    options=[None] + empresas_otec_n,
+                    format_func=lambda e: e["nombre_empresa"] if e else "— Selecciona empresa —",
+                    key="ng_empresa",
+                )
+            with col2:
+                nombre_n = st.text_input("Nombre del grupo", key="ng_nombre")
+            with col3:
+                plantilla_sel_n = st.selectbox(
+                    "Plantilla",
+                    options=[None] + plantillas_n,
+                    format_func=lambda p: p["nombre"] if p else "— Selecciona plantilla —",
+                    key="ng_plantilla",
+                )
+
+            rut_empresa_n = empresa_sel_n["rut_empresa"] if empresa_sel_n else None
+            seleccionados_n = []
+            personas_n = []
+            rows_n = []
+
+            # Mostrar tabla solo cuando empresa Y plantilla estén seleccionadas
+            if empresa_sel_n and plantilla_sel_n:
+                personas_n = queries.listar_personas_sist(rut_empresa=rut_empresa_n)
+                if not personas_n:
+                    personas_n = queries.listar_personas_sist()
+
+                st.divider()
+                st.markdown("**Selecciona los participantes:**")
+
+                if not personas_n:
+                    st.info("No hay personas con correo registradas en sist_personas.")
                 else:
-                    queries.crear_grupo(nombre.strip(), plantilla_sel["id"], empresa.strip())
-                    st.success("Grupo creado")
-                    st.rerun()
+                    personas_n_ord = sorted(personas_n, key=lambda p: (p.get("pers_apellidos") or "").lower())
+                    rows_n = [
+                        {
+                            "✓": False,
+                            "#": i,
+                            "RUT": p["pers_rut"],
+                            "Nombres": p.get("pers_nombres", ""),
+                            "Apellidos": p.get("pers_apellidos", ""),
+                            "Correo": p.get("pers_correo", ""),
+                        }
+                        for i, p in enumerate(personas_n_ord, 1)
+                    ]
+                    df_n = pd.DataFrame(rows_n)
+
+                    edited_n = st.data_editor(
+                        df_n,
+                        column_config={
+                            "✓": st.column_config.CheckboxColumn("✓", default=False, width="small"),
+                            "#": st.column_config.NumberColumn("#", disabled=True, width="small"),
+                            "RUT": st.column_config.TextColumn("RUT", disabled=True, width=120),
+                            "Nombres": st.column_config.TextColumn("Nombres", disabled=True, width=160),
+                            "Apellidos": st.column_config.TextColumn("Apellidos", disabled=True, width=160),
+                            "Correo": st.column_config.TextColumn("Correo", disabled=True),
+                        },
+                        disabled=["#", "RUT", "Nombres", "Apellidos", "Correo"],
+                        hide_index=True,
+                        use_container_width=True,
+                        key=f"ng_editor_{rut_empresa_n or 'todos'}",
+                    )
+
+                    seleccionados_n = edited_n.index[edited_n["✓"] == True].tolist()
+                    st.caption(f"{len(seleccionados_n)} persona(s) seleccionada(s) de {len(personas_n_ord)}")
+            else:
+                st.info("Selecciona empresa y plantilla para ver los participantes disponibles.")
+
+            st.divider()
+            if st.button("💾 Guardar selección", use_container_width=True, type="primary", key="ng_guardar"):
+                errores_n = []
+                if not empresa_sel_n:
+                    errores_n.append("Selecciona una empresa.")
+                if not plantilla_sel_n:
+                    errores_n.append("Selecciona una plantilla.")
+                if not nombre_n.strip():
+                    errores_n.append("Ingresa un nombre de grupo.")
+                if personas_n and len(seleccionados_n) == 0:
+                    errores_n.append("Selecciona al menos un participante.")
+                if errores_n:
+                    for e in errores_n:
+                        st.warning(e)
+                else:
+                    try:
+                        grupo_nuevo = queries.crear_grupo(nombre_n.strip(), plantilla_sel_n["id"], rut_empresa_n)
+                        gid = grupo_nuevo["id"]
+                        for idx in seleccionados_n:
+                            queries.crear_participante(gid, rows_n[idx]["RUT"])
+                        st.success(f"✅ Grupo '{nombre_n.strip()}' creado con {len(seleccionados_n)} participante(s).")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error: {e}")
 
     with tab_lista:
         import pandas as pd
@@ -382,6 +462,7 @@ def pagina_grupos():
                 "Participantes": n_parts,
             })
 
+        st.caption("Marca ✓ un grupo y pulsa **📂 Abrir** para ver y agregar participantes.")
         df_orig = pd.DataFrame(rows_orig)
 
         edited_df = st.data_editor(
@@ -389,28 +470,38 @@ def pagina_grupos():
             column_config={
                 "✓": st.column_config.CheckboxColumn("✓", default=False, width="small"),
                 "#": st.column_config.NumberColumn("#", disabled=True, width="small"),
-                "Empresa": st.column_config.TextColumn("Empresa"),
+                "Empresa": st.column_config.TextColumn("Empresa", disabled=True),
                 "Nombre": st.column_config.TextColumn("Nombre"),
                 "Plantilla": st.column_config.TextColumn("Plantilla", disabled=True),
                 "Estado": st.column_config.TextColumn("Estado", disabled=True),
                 "Participantes": st.column_config.NumberColumn("Participantes", disabled=True, width="small"),
             },
-            disabled=["#", "Plantilla", "Estado", "Participantes"],
+            disabled=["#", "Empresa", "Plantilla", "Estado", "Participantes"],
             hide_index=True,
             use_container_width=True,
             key="grupos_editor",
         )
 
-        a_eliminar = edited_df.index[edited_df["✓"] == True].tolist()
-        col_grabar, col_eliminar, _ = st.columns([1.2, 1.2, 4])
+        a_sel = edited_df.index[edited_df["✓"] == True].tolist()
+        col_abrir, col_grabar, col_eliminar, _ = st.columns([1.2, 1.2, 1.2, 2.8])
+
+        with col_abrir:
+            if st.button(
+                "📂 Abrir",
+                use_container_width=True,
+                type="primary",
+                disabled=(len(a_sel) != 1),
+                help="Marca un grupo para abrirlo y agregar participantes",
+            ):
+                st.session_state["grupo_detalle"] = grupos[a_sel[0]]["id"]
+                st.rerun()
 
         with col_grabar:
-            if st.button("💾 Grabar", use_container_width=True, type="primary"):
+            if st.button("💾 Grabar", use_container_width=True):
                 cambios = 0
                 for idx, (orig, edit) in enumerate(zip(rows_orig, edited_df.to_dict("records"))):
-                    if edit["Empresa"] != orig["Empresa"] or edit["Nombre"] != orig["Nombre"]:
+                    if edit["Nombre"] != orig["Nombre"]:
                         queries.actualizar_grupo(grupos[idx]["id"], {
-                            "empresa": edit["Empresa"].strip(),
                             "nombre": edit["Nombre"].strip(),
                         })
                         cambios += 1
@@ -422,17 +513,82 @@ def pagina_grupos():
 
         with col_eliminar:
             if st.button(
-                f"🗑️ Eliminar ({len(a_eliminar)})" if a_eliminar else "🗑️ Eliminar",
+                f"🗑️ Eliminar ({len(a_sel)})" if a_sel else "🗑️ Eliminar",
                 use_container_width=True,
-                disabled=(len(a_eliminar) == 0),
+                disabled=(len(a_sel) == 0),
             ):
-                for idx in a_eliminar:
+                for idx in a_sel:
                     queries.eliminar_grupo(grupos[idx]["id"])
-                st.success(f"✅ {len(a_eliminar)} grupo(s) eliminado(s).")
+                st.success(f"✅ {len(a_sel)} grupo(s) eliminado(s).")
                 st.rerun()
 
-    with tab_csv:
-        _contenido_importar_participantes()
+    with tab_agregar:
+        import pandas as pd
+        st.markdown("#### Agregar participante a grupo existente")
+
+        grupos_ag = queries.listar_grupos()
+        if not grupos_ag:
+            st.warning("No hay grupos creados.")
+        else:
+            grupo_ag = st.selectbox(
+                "Selecciona el grupo",
+                options=grupos_ag,
+                format_func=lambda g: f"{g['nombre']} — {g.get('empresa') or 'Sin empresa'}",
+                key="ag_grupo",
+            )
+
+            if grupo_ag:
+                grupo_id_ag = grupo_ag["id"]
+                participantes_ag = queries.listar_participantes(grupo_id_ag)
+                enrolled_ruts_ag = {p["pers_rut"] for p in participantes_ag if p.get("pers_rut")}
+
+                st.markdown(f"**Participantes actuales:** {len(participantes_ag)}")
+
+                # Buscar persona existente
+                st.divider()
+                st.markdown("**Opción 1 — Agregar persona existente**")
+                rut_empresa_ag = grupo_ag.get("rut_empresa")
+                personas_ag = queries.listar_personas_sist(rut_empresa=rut_empresa_ag)
+                if not personas_ag:
+                    personas_ag = queries.listar_personas_sist()
+
+                disponibles_ag = [p for p in personas_ag if p["pers_rut"] not in enrolled_ruts_ag]
+                disponibles_ag = sorted(disponibles_ag, key=lambda p: (p.get("pers_apellidos") or "").lower())
+
+                if not disponibles_ag:
+                    st.info("Todas las personas disponibles ya están en este grupo.")
+                else:
+                    persona_ag = st.selectbox(
+                        "Persona",
+                        options=[None] + disponibles_ag,
+                        format_func=lambda p: f"{p['pers_apellidos']}, {p['pers_nombres']} — {p['pers_correo']}" if p else "— Selecciona —",
+                        key="ag_persona",
+                    )
+                    if st.button("➕ Agregar al grupo", key="ag_btn_add", type="primary"):
+                        if persona_ag:
+                            queries.crear_participante(grupo_id_ag, persona_ag["pers_rut"])
+                            st.success(f"✅ {persona_ag['pers_nombres']} {persona_ag['pers_apellidos']} agregado/a.")
+                            st.rerun()
+                        else:
+                            st.warning("Selecciona una persona.")
+
+                # Crear persona nueva
+                st.divider()
+                st.markdown("**Opción 2 — Crear persona nueva y agregar**")
+                with st.form("form_nueva_persona_ag"):
+                    c1, c2, c3, c4 = st.columns(4)
+                    nr = c1.text_input("RUT")
+                    nn = c2.text_input("Nombres")
+                    na = c3.text_input("Apellidos")
+                    nc = c4.text_input("Correo")
+                    if st.form_submit_button("Crear y agregar", use_container_width=True):
+                        if nr.strip() and nn.strip() and na.strip() and nc.strip():
+                            queries.crear_persona_sist(nr.strip(), nn.strip(), na.strip(), nc.strip(), rut_empresa_ag)
+                            queries.crear_participante(grupo_id_ag, nr.strip())
+                            st.success(f"✅ {nn.strip()} {na.strip()} creado/a y agregado/a al grupo.")
+                            st.rerun()
+                        else:
+                            st.warning("Todos los campos son obligatorios.")
 
 
 def _detalle_grupo(grupo_id):
@@ -445,7 +601,7 @@ def _detalle_grupo(grupo_id):
 
     plantilla_nombre = grupo.get("v2_plantillas", {}).get("nombre", "—") if grupo.get("v2_plantillas") else "—"
     empresa_nombre = grupo.get("empresa") or "—"
-    st.markdown(f"#### {grupo.get('codigo', '')} — {grupo['nombre']} · {empresa_nombre} · Plantilla: {plantilla_nombre} · Estado: {grupo['estado']}")
+    st.markdown(f"#### {grupo['nombre']} · {empresa_nombre} · Plantilla: {plantilla_nombre} · Estado: {grupo['estado']}")
 
     # --- 0. Edición del grupo ---
     with st.expander("✏️ Editar datos del grupo"):
@@ -457,7 +613,20 @@ def _detalle_grupo(grupo_id):
         idx_pl = nombres_pl.index(plantilla_actual_nombre) if plantilla_actual_nombre in nombres_pl else 0
         with st.form(f"form_editar_grupo_{grupo_id}"):
             eg0, eg1, eg2 = st.columns(3)
-            nueva_empresa = eg0.text_input("Empresa", value=grupo.get("empresa") or "")
+            empresas_otec_edit = queries.listar_empresas_otec()
+            empresa_actual_rut = grupo.get("rut_empresa")
+            idx_emp_edit = 0
+            for _i, _emp in enumerate(empresas_otec_edit):
+                if _emp["rut_empresa"] == empresa_actual_rut:
+                    idx_emp_edit = _i
+                    break
+            nueva_empresa_sel = eg0.selectbox(
+                "Empresa",
+                options=empresas_otec_edit if empresas_otec_edit else [None],
+                index=idx_emp_edit,
+                format_func=lambda e: e["nombre_empresa"] if e else "— Sin empresa —",
+                key=f"sel_empresa_{grupo_id}",
+            )
             nuevo_nombre = eg1.text_input("Nombre del grupo", value=grupo["nombre"])
             nueva_plantilla_nombre = eg2.selectbox(
                 "Plantilla",
@@ -470,103 +639,118 @@ def _detalle_grupo(grupo_id):
                     (p["id"] for p in todas_pl if p["nombre"] == nueva_plantilla_nombre), None
                 )
                 queries.actualizar_grupo(grupo_id, {
-                    "empresa": nueva_empresa.strip(),
+                    "rut_empresa": nueva_empresa_sel["rut_empresa"] if nueva_empresa_sel else None,
                     "nombre": nuevo_nombre.strip(),
                     "plantilla_id": nueva_plantilla_id,
                 })
                 st.success("Grupo actualizado.")
                 st.rerun()
 
+    import pandas as pd
+
     participantes = queries.listar_participantes(grupo_id)
+    huerfanos = [p for p in participantes if not p.get("pers_rut")]
+    rut_empresa_grupo = grupo.get("rut_empresa")
 
-    # --- 1. Planilla de miembros ---
-    if "editando_participante" not in st.session_state:
-        st.session_state["editando_participante"] = None
+    if huerfanos:
+        st.warning(
+            f"⚠️ **{len(huerfanos)} participante(s) sin vincular** a sist_personas (datos previos a la migración). "
+            "Elimínalos o vincúlalos desde Mantenedores."
+        )
 
+    # Cargar personas disponibles (filtradas por empresa, fallback todas)
+    todas_personas = queries.listar_personas_sist(rut_empresa=rut_empresa_grupo)
+    if not todas_personas:
+        todas_personas = queries.listar_personas_sist()
+
+    # Conteo de evaluadores por participante (una sola consulta)
+    ev_list = queries.listar_evaluadores_por_grupo(grupo_id)
+    ev_count = {}
+    for ev in ev_list:
+        pid = ev.get("participante_id_ref")
+        if pid:
+            ev_count[pid] = ev_count.get(pid, 0) + 1
+
+    enrolled_ruts = {p["pers_rut"] for p in participantes if p.get("pers_rut")}
+    part_by_rut = {p["pers_rut"]: p for p in participantes if p.get("pers_rut")}
+
+    # Construir filas: todas las personas ordenadas por apellido, pre-marcar las inscritas
+    todas_personas_ord = sorted(todas_personas, key=lambda p: (p.get("pers_apellidos") or "").lower())
+    rows_part = []
+    for i, per in enumerate(todas_personas_ord, 1):
+        rut = per["pers_rut"]
+        enrolled = rut in enrolled_ruts
+        part = part_by_rut.get(rut, {})
+        n_ev = ev_count.get(part.get("id"), 0) if part else 0
+        if enrolled:
+            estado = "✅ Completada" if part.get("autoevaluacion_completada") else "⏳ Pendiente"
+        else:
+            estado = ""
+        rows_part.append({
+            "✓": enrolled,
+            "#": i,
+            "RUT": rut,
+            "Nombres": per.get("pers_nombres", ""),
+            "Apellidos": per.get("pers_apellidos", ""),
+            "Estado Auto.": estado,
+            "N° Eval.": n_ev,
+        })
+
+    # --- Planilla tipo Excel ---
     st.markdown(f"#### Participantes ({len(participantes)})")
-    if participantes:
-        hc = st.columns([0.5, 2, 2.5, 1.5, 1.2, 0.5, 0.5])
-        hc[0].markdown("**#**")
-        hc[1].markdown("**Nombre**")
-        hc[2].markdown("**Correo**")
-        hc[3].markdown("**Estado auto**")
-        hc[4].markdown("**Evaluadores**")
-        hc[5].markdown("")
-        hc[6].markdown("")
-        st.markdown("---")
 
-        for p in participantes:
-            evaluadores = queries.listar_evaluadores(p["id"])
-            estado = "Completada" if p["autoevaluacion_completada"] else "Pendiente"
-
-            if st.session_state.get("editando_participante") == p["id"]:
-                with st.form(f"edit_part_{p['id']}"):
-                    ec = st.columns([0.5, 2, 2.5, 1.5, 1.2, 0.5, 0.5])
-                    with ec[0]:
-                        st.caption(str(p["correlativo"]))
-                    with ec[1]:
-                        edit_nombre = st.text_input("Nombre", value=p["nombre"], label_visibility="collapsed", key=f"ep_nom_{p['id']}")
-                    with ec[2]:
-                        edit_email = st.text_input("Email", value=p["email"], label_visibility="collapsed", key=f"ep_mail_{p['id']}")
-                    with ec[3]:
-                        st.caption(estado)
-                    with ec[4]:
-                        st.caption(str(len(evaluadores)))
-                    with ec[5]:
-                        guardar = st.form_submit_button("💾")
-                    with ec[6]:
-                        pass
-                    if guardar:
-                        queries.actualizar_participante(p["id"], {
-                            "nombre": edit_nombre.strip(),
-                            "email": edit_email.strip(),
-                        })
-                        st.session_state["editando_participante"] = None
-                        st.rerun()
-                if st.button("Cancelar", key=f"cancel_part_{p['id']}"):
-                    st.session_state["editando_participante"] = None
-                    st.rerun()
-            else:
-                rc = st.columns([0.5, 2, 2.5, 1.5, 1.2, 0.5, 0.5])
-                with rc[0]:
-                    st.caption(str(p["correlativo"]))
-                with rc[1]:
-                    st.caption(p["nombre"])
-                with rc[2]:
-                    st.caption(p["email"])
-                with rc[3]:
-                    st.caption(estado)
-                with rc[4]:
-                    st.caption(str(len(evaluadores)))
-                with rc[5]:
-                    if st.button("✏️", key=f"editp_{p['id']}"):
-                        st.session_state["editando_participante"] = p["id"]
-                        st.rerun()
-                with rc[6]:
-                    if st.button("🗑️", key=f"delp_{p['id']}"):
-                        queries.eliminar_participante(p["id"])
-                        st.rerun()
+    if not todas_personas:
+        st.info("No hay personas en sist_personas. Crea una usando el formulario de abajo.")
     else:
-        st.info("No hay participantes. Agrega uno abajo.")
+        df_part = pd.DataFrame(rows_part)
+        edited_part = st.data_editor(
+            df_part,
+            column_config={
+                "✓": st.column_config.CheckboxColumn("✓", default=False, width="small"),
+                "#": st.column_config.NumberColumn("#", disabled=True, width="small"),
+                "RUT": st.column_config.TextColumn("RUT", disabled=True, width=120),
+                "Nombres": st.column_config.TextColumn("Nombres", disabled=True, width=160),
+                "Apellidos": st.column_config.TextColumn("Apellidos", disabled=True, width=160),
+                "Estado Auto.": st.column_config.TextColumn("Estado Auto.", disabled=True, width=140),
+                "N° Eval.": st.column_config.NumberColumn("N° Eval.", disabled=True, width="small"),
+            },
+            disabled=["#", "RUT", "Nombres", "Apellidos", "Estado Auto.", "N° Eval."],
+            hide_index=True,
+            use_container_width=True,
+            key=f"part_editor_{grupo_id}",
+        )
 
-    st.divider()
-
-    # --- 2. Agregar participante ---
-    st.markdown("#### Agregar participante")
-    with st.form("agregar_participante"):
-        col1, col2, col3 = st.columns([2, 2.5, 1])
-        with col1:
-            nombre_p = st.text_input("Nombre", label_visibility="collapsed", placeholder="Nombre")
-        with col2:
-            email_p = st.text_input("Email", label_visibility="collapsed", placeholder="Email")
-        with col3:
-            agregar = st.form_submit_button("Agregar", use_container_width=True)
-        if agregar:
-            if nombre_p.strip() and email_p.strip():
-                queries.crear_participante(grupo_id, nombre_p.strip(), email_p.strip())
-                st.rerun()
+        if st.button("💾 Grabar", use_container_width=True, type="primary", key=f"grabar_part_{grupo_id}"):
+            nuevos_ruts = [
+                todas_personas_ord[idx]["pers_rut"]
+                for idx in range(len(rows_part))
+                if edited_part.iloc[idx]["✓"] and not rows_part[idx]["✓"]
+            ]
+            if not nuevos_ruts:
+                st.info("No hay nuevos participantes seleccionados.")
             else:
-                st.warning("Completa nombre y email")
+                for rut in nuevos_ruts:
+                    queries.crear_participante(grupo_id, rut)
+                st.success(f"✅ {len(nuevos_ruts)} participante(s) agregado(s).")
+                st.rerun()
+
+    with st.expander("➕ Crear persona nueva en Asistencias"):
+        with st.form(f"form_crear_persona_grupo_{grupo_id}"):
+            fp1, fp2, fp3, fp4 = st.columns(4)
+            new_rut = fp1.text_input("RUT")
+            new_nombres = fp2.text_input("Nombres")
+            new_apellidos = fp3.text_input("Apellidos")
+            new_correo = fp4.text_input("Correo")
+            if st.form_submit_button("Crear persona", use_container_width=True):
+                if new_rut.strip() and new_nombres.strip() and new_apellidos.strip() and new_correo.strip():
+                    queries.crear_persona_sist(
+                        new_rut.strip(), new_nombres.strip(), new_apellidos.strip(),
+                        new_correo.strip(), rut_empresa_grupo,
+                    )
+                    st.success(f"✅ {new_nombres.strip()} {new_apellidos.strip()} creada/o.")
+                    st.rerun()
+                else:
+                    st.warning("RUT, nombres, apellidos y correo son obligatorios.")
 
     st.divider()
 
@@ -1115,13 +1299,14 @@ def _calcular_puntajes_360(participante_id, plantilla_id):
         else:
             if cid not in feedback_scores:
                 feedback_scores[cid] = []
-            feedback_scores[cid].append(r["puntaje"])
+            feedback_scores[cid].append((r.get("evaluador_id"), r["puntaje"]))
 
     resultados_comp = []
     for comp in competencias:
         cid = comp["id"]
         auto = auto_scores.get(cid, 0)
-        fb_list = feedback_scores.get(cid, [])
+        fb_list_raw = feedback_scores.get(cid, [])
+        fb_list = [p for _, p in fb_list_raw]
         fb_avg = sum(fb_list) / len(fb_list) if fb_list else 0
         diff = round(fb_avg - auto, 1)
         # Umbral 3.5: referencia = promedio feedback (percepción externa en 360°)
@@ -1137,6 +1322,7 @@ def _calcular_puntajes_360(participante_id, plantilla_id):
             "feedback": round(fb_avg, 1),
             "diferencia": diff,
             "recomendacion": recomendacion,
+            "notas_por_evaluador": {ev_id: p for ev_id, p in fb_list_raw},
         })
 
     cat_map = {}
@@ -1402,7 +1588,10 @@ def pagina_informe_final():
         return
 
     participantes = queries.listar_participantes(grupo_sel["id"])
-    participantes_completos = [p for p in participantes if p["autoevaluacion_completada"]]
+    participantes_completos = sorted(
+        [p for p in participantes if p["autoevaluacion_completada"]],
+        key=lambda p: p["nombre"],
+    )
 
     if not participantes_completos:
         st.info("No hay participantes con autoevaluación completada en este grupo.")
@@ -1413,6 +1602,51 @@ def pagina_informe_final():
     if not part_sel:
         return
 
+    # ── Autoevaluación ────────────────────────────────────────
+    grupo_info = queries.obtener_grupo(grupo_sel["id"])
+    plantilla_id = grupo_info["plantilla_id"] if grupo_info else None
+
+    todas_respuestas = queries.obtener_respuestas_participante(part_sel["id"]) or []
+    respuestas_auto = [r for r in todas_respuestas if r.get("es_autoevaluacion")]
+
+    st.divider()
+    st.subheader("Autoevaluación")
+
+    if not plantilla_id:
+        st.warning("No se encontró la plantilla del grupo.")
+    elif not respuestas_auto:
+        st.warning(
+            "⚠️ La autoevaluación está marcada como completada pero no hay respuestas guardadas en la base de datos. "
+            "Ve a **Ingresos Especiales → Ingreso Respuesta Autoevaluación** para ingresar las respuestas manualmente."
+        )
+    else:
+        import pandas as pd
+        resp_map = {r["competencia_id"]: r["puntaje"] for r in respuestas_auto}
+        # Orden global por campo orden (igual que el Excel de referencia: intercalado entre categorías)
+        competencias_flat = sorted(
+            queries.listar_competencias_por_plantilla(plantilla_id),
+            key=lambda c: c.get("orden", 0),
+        )
+        filas = []
+        for n, comp in enumerate(competencias_flat, 1):
+            filas.append({
+                "#": n,
+                "Ámbito": comp.get("categoria_nombre", ""),
+                "Competencia": comp.get("texto_auto") or comp.get("nombre", ""),
+                "Nota": resp_map.get(comp["id"]),
+            })
+        st.dataframe(
+            pd.DataFrame(filas),
+            width="stretch",
+            hide_index=True,
+            column_config={
+                "#": st.column_config.NumberColumn("#", width="small"),
+                "Nota": st.column_config.NumberColumn("Nota", width="small"),
+            },
+        )
+
+    st.divider()
+
     evaluadores = queries.listar_evaluadores(part_sel["id"])
     completados = [e for e in evaluadores if e["completado"]]
 
@@ -1422,8 +1656,74 @@ def pagina_informe_final():
 
     st.caption(f"Evaluadores completados: {len(completados)}/{len(evaluadores)}")
 
-    grupo_info = queries.obtener_grupo(grupo_sel["id"])
-    plantilla_id = grupo_info["plantilla_id"] if grupo_info else None
+    # Tabla notas por evaluador
+    if completados and plantilla_id:
+        import pandas as pd
+        todas_resp = queries.obtener_respuestas_participante(part_sel["id"]) or []
+        competencias_pl = queries.listar_competencias_por_plantilla(plantilla_id)
+        ev_ids_t     = [e["id"]     for e in completados]
+        ev_nombres_t = [e["nombre"] for e in completados]
+        filas_ev = []
+        for comp in sorted(competencias_pl, key=lambda c: c.get("orden", 0)):
+            resp_auto = next((r for r in todas_resp if r["competencia_id"] == comp["id"] and r.get("es_autoevaluacion")), None)
+            auto_val = resp_auto["puntaje"] if resp_auto else None
+            notas_fb = []
+            fila = {
+                "Ámbito": comp.get("categoria_nombre", ""),
+                "Competencia": comp.get("texto_feedback") or comp.get("nombre", ""),
+                "Auto": auto_val,
+            }
+            prom_col_pos = len(fila)  # posición donde irá el promedio
+            for ev_id, ev_nom in zip(ev_ids_t, ev_nombres_t):
+                resp = next((r for r in todas_resp if r["competencia_id"] == comp["id"] and r.get("evaluador_id") == ev_id), None)
+                nota = resp["puntaje"] if resp else None
+                fila[ev_nom] = nota
+                if nota is not None:
+                    notas_fb.append(nota)
+            prom_fb = round(sum(notas_fb) / len(notas_fb), 1) if notas_fb else None
+            diff = round(prom_fb - auto_val, 1) if (prom_fb is not None and auto_val is not None) else None
+            # Insertar Promedio Feedback y Diferencia al final
+            fila["Prom. Feedback"] = prom_fb
+            fila["Diferencia"] = diff
+            filas_ev.append(fila)
+
+        # Reordenar columnas: Ámbito, Competencia, Auto, Prom. Feedback, evaluadores..., Diferencia
+        cols_order = ["Ámbito", "Competencia", "Auto", "Prom. Feedback"] + ev_nombres_t + ["Diferencia"]
+        df_ev = pd.DataFrame(filas_ev)[cols_order]
+        st.subheader("Notas por Evaluador")
+        st.dataframe(df_ev, use_container_width=True, hide_index=True)
+
+        # Tabla resumen por ámbito
+        ambitos = {}
+        for fila in filas_ev:
+            amb = fila["Ámbito"]
+            if amb not in ambitos:
+                ambitos[amb] = {"auto": [], "prom_fb": [], "ev": {n: [] for n in ev_nombres_t}}
+            if fila["Auto"] is not None:
+                ambitos[amb]["auto"].append(fila["Auto"])
+            if fila["Prom. Feedback"] is not None:
+                ambitos[amb]["prom_fb"].append(fila["Prom. Feedback"])
+            for ev_nom in ev_nombres_t:
+                if fila.get(ev_nom) is not None:
+                    ambitos[amb]["ev"][ev_nom].append(fila[ev_nom])
+
+        filas_amb = []
+        for amb, vals in ambitos.items():
+            auto_amb = round(sum(vals["auto"]) / len(vals["auto"]), 1) if vals["auto"] else None
+            prom_amb = round(sum(vals["prom_fb"]) / len(vals["prom_fb"]), 1) if vals["prom_fb"] else None
+            diff_amb = round(prom_amb - auto_amb, 1) if (prom_amb is not None and auto_amb is not None) else None
+            fila_amb = {"Ámbito": amb, "Auto": auto_amb, "Prom. Feedback": prom_amb}
+            for ev_nom in ev_nombres_t:
+                ev_vals = vals["ev"][ev_nom]
+                fila_amb[ev_nom] = round(sum(ev_vals) / len(ev_vals), 1) if ev_vals else None
+            fila_amb["Diferencia"] = diff_amb
+            filas_amb.append(fila_amb)
+
+        cols_amb = ["Ámbito", "Auto", "Prom. Feedback"] + ev_nombres_t + ["Diferencia"]
+        df_amb = pd.DataFrame(filas_amb)[cols_amb]
+        st.subheader("Resumen por Ámbito")
+        st.dataframe(df_amb, use_container_width=True, hide_index=True)
+        st.divider()
 
     if not plantilla_id:
         st.error("No se encontró la plantilla del grupo.")
@@ -1444,6 +1744,7 @@ def pagina_informe_final():
                     "secciones": secciones,
                     "practicas": practicas_parseadas,
                     "nombre": part_sel["nombre"],
+                    "evaluadores": completados,
                 }
             except Exception as e:
                 st.error(f"Error al generar informe: {e}")
@@ -1479,9 +1780,9 @@ def pagina_informe_final():
     for cat in resultados_cat:
         rc = st.columns([3, 1.5, 1.5, 1.5])
         rc[0].caption(cat["categoria"])
-        rc[1].caption(str(cat["auto"]))
-        rc[2].caption(str(cat["feedback"]))
-        rc[3].caption(str(cat["diferencia"]))
+        rc[1].caption(f"{cat['auto']:.1f}")
+        rc[2].caption(f"{cat['feedback']:.1f}")
+        rc[3].caption(f"{cat['diferencia']:.1f}")
 
     st.markdown("")
     st.markdown(secciones.get("ANALISIS_CATEGORIAS", ""))
@@ -1509,9 +1810,9 @@ def pagina_informe_final():
         for comp in comps_cat:
             rc2 = st.columns([3, 1.2, 1.2, 1.2, 1.5])
             rc2[0].caption(comp["texto_feedback"])
-            rc2[1].caption(str(comp["auto"]))
-            rc2[2].caption(str(comp["feedback"]))
-            rc2[3].caption(str(comp["diferencia"]))
+            rc2[1].caption(f"{comp['auto']:.1f}")
+            rc2[2].caption(f"{comp['feedback']:.1f}")
+            rc2[3].caption(f"{comp['diferencia']:.1f}")
             if comp["recomendacion"] == "Aprender":
                 rc2[4].markdown(f":red[**{comp['recomendacion']}**]")
             else:
@@ -1576,17 +1877,25 @@ def pagina_informe_final():
             ws1.column_dimensions[col[0].column_letter].width = max(max_len + 2, 14)
 
         ws2 = wb.create_sheet("Por Competencia")
-        for i, h in enumerate(["Categoría", "Competencia", "Autoevaluación", "Feedback", "Diferencia", "Recomendación"], 1):
+        ev_list = inf.get("evaluadores", [])
+        ev_ids = [e["id"] for e in ev_list]
+        ev_nombres = [e["nombre"] for e in ev_list]
+        headers2 = ["Categoría", "Competencia", "Autoevaluación"] + ev_nombres + ["Promedio Feedback", "Diferencia", "Recomendación"]
+        for i, h in enumerate(headers2, 1):
             cell = ws2.cell(row=1, column=i, value=h)
             cell.font = h_font
             cell.fill = h_fill
         for idx, comp in enumerate(resultados_comp, 2):
-            ws2.cell(row=idx, column=1, value=comp["categoria"])
-            ws2.cell(row=idx, column=2, value=comp["texto_feedback"])
-            ws2.cell(row=idx, column=3, value=comp["auto"])
-            ws2.cell(row=idx, column=4, value=comp["feedback"])
-            ws2.cell(row=idx, column=5, value=comp["diferencia"])
-            ws2.cell(row=idx, column=6, value=comp["recomendacion"])
+            col = 1
+            ws2.cell(row=idx, column=col, value=comp["categoria"]); col += 1
+            ws2.cell(row=idx, column=col, value=comp["texto_feedback"]); col += 1
+            ws2.cell(row=idx, column=col, value=comp["auto"]); col += 1
+            for ev_id in ev_ids:
+                nota = comp.get("notas_por_evaluador", {}).get(ev_id, "")
+                ws2.cell(row=idx, column=col, value=nota); col += 1
+            ws2.cell(row=idx, column=col, value=comp["feedback"]); col += 1
+            ws2.cell(row=idx, column=col, value=comp["diferencia"]); col += 1
+            ws2.cell(row=idx, column=col, value=comp["recomendacion"]); col += 1
         for col in ws2.columns:
             max_len = max(len(str(c.value or "")) for c in col)
             ws2.column_dimensions[col[0].column_letter].width = max(max_len + 2, 14)
@@ -2075,7 +2384,16 @@ def _contenido_importar_encuesta_csv():
 # ============================================================
 
 def _contenido_importar_participantes():
-    import pandas as pd
+    st.info(
+        "La importación desde CSV ya no está disponible. "
+        "Los participantes se agregan seleccionándolos directamente desde el registro de personas "
+        "del Sistema de Asistencias (sist_personas). "
+        "Si la persona no existe, créala usando el formulario **'Crear persona en Asistencias'** "
+        "en el detalle del grupo."
+    )
+    return
+
+    import pandas as pd  # unreachable — kept for reference
 
     st.markdown(
         "Carga un CSV con **Nombre** y **Correo** de los participantes. "
@@ -2261,7 +2579,10 @@ def _cascada_ingresos(prefix):
         format_func=lambda g: g["nombre"], key=f"{prefix}_grupo",
     )
 
-    participantes = queries.listar_participantes(grupo_sel["id"])
+    participantes = sorted(
+        queries.listar_participantes(grupo_sel["id"]),
+        key=lambda p: (p.get("pers_apellidos") or p.get("nombre") or "").lower(),
+    )
     if not participantes:
         st.info("Este grupo no tiene participantes.")
         return None, None
@@ -2271,7 +2592,7 @@ def _cascada_ingresos(prefix):
         format_func=lambda p: p["nombre"], key=f"{prefix}_part",
     )
     col_mail.text_input("Correo", value=part_sel.get("email") or "—",
-                        disabled=True, key=f"{prefix}_mail")
+                        disabled=True, key=f"{prefix}_mail_{part_sel['id']}")
     return grupo_sel, part_sel
 
 
@@ -2299,19 +2620,56 @@ def _tab_ingreso_evaluadores():
         st.info("Sin evaluadores registrados.")
 
     st.divider()
-    st.markdown("**Agregar evaluador:**")
+    emails_existentes_ev = {e["email"].strip().lower() for e in evs}
+
+    # Agregar desde sist_personas
+    st.markdown("**Agregar evaluador desde Asistencias:**")
+    rut_empresa_ev = grupo_sel.get("rut_empresa")
+    personas_ev = [
+        p for p in queries.listar_personas_sist(rut_empresa=rut_empresa_ev)
+        if p.get("pers_correo", "").lower() not in emails_existentes_ev
+    ]
+    pe1, pe2 = st.columns([4, 1])
+    with pe1:
+        persona_ev_sel = st.selectbox(
+            "Persona",
+            options=personas_ev if personas_ev else [None],
+            format_func=lambda p: (
+                f"{p['pers_apellidos']}, {p['pers_nombres']} — {p['pers_correo']}"
+                if p else "— No hay personas disponibles —"
+            ),
+            key="iev_persona_sel",
+            label_visibility="collapsed",
+        )
+    with pe2:
+        if st.button("➕ Agregar", use_container_width=True,
+                     disabled=(persona_ev_sel is None), key="iev_btn_persona"):
+            ev_n = f"{persona_ev_sel['pers_nombres']} {persona_ev_sel['pers_apellidos']}".strip()
+            try:
+                queries.crear_evaluador(part_sel["id"], ev_n,
+                                        persona_ev_sel["pers_correo"],
+                                        persona_ev_sel["pers_rut"])
+                st.success(f"✅ {ev_n} agregado.")
+                st.rerun()
+            except Exception as ex:
+                st.error(f"Error: {ex}")
+
+    st.divider()
+    st.markdown("**O ingresar manualmente (si no está en el sistema):**")
     with st.form("form_ev_directo", clear_on_submit=True):
         fa1, fa2 = st.columns(2)
         ev_nombre = fa1.text_input("Nombre")
         ev_email  = fa2.text_input("Correo")
-        if st.form_submit_button("➕ Agregar", use_container_width=True):
+        if st.form_submit_button("➕ Agregar manual", use_container_width=True):
             if ev_nombre.strip() and ev_email.strip():
-                emails_existentes = {e["email"].strip().lower() for e in evs}
-                if ev_email.strip().lower() in emails_existentes:
+                if ev_email.strip().lower() in emails_existentes_ev:
                     st.warning("Ya existe un evaluador con ese correo para este participante.")
                 else:
                     try:
-                        queries.crear_evaluador(part_sel["id"], ev_nombre.strip(), ev_email.strip())
+                        persona_match = queries.buscar_persona_por_correo(ev_email.strip())
+                        pers_rut_ev = persona_match["pers_rut"] if persona_match else None
+                        queries.crear_evaluador(part_sel["id"], ev_nombre.strip(),
+                                                ev_email.strip(), pers_rut_ev)
                         st.success(f"✅ {ev_nombre} agregado.")
                         st.rerun()
                     except Exception as ex:
@@ -2334,17 +2692,24 @@ def _tab_ingreso_auto():
         st.error("El grupo no tiene plantilla asignada.")
         return
 
-    competencias = queries.listar_competencias_por_plantilla(plantilla_id)
+    competencias = sorted(
+        queries.listar_competencias_por_plantilla(plantilla_id),
+        key=lambda c: c.get("orden", 0),
+    )
     if not competencias:
         st.info("La plantilla no tiene competencias.")
         return
 
     st.divider()
 
+    # Precargar respuestas existentes si las hay
+    resp_existentes = queries.obtener_respuestas_participante(part_sel["id"]) or []
+    resp_map = {r["competencia_id"]: r["puntaje"] for r in resp_existentes if r.get("es_autoevaluacion")}
+
     df = pd.DataFrame({
         "#": list(range(1, len(competencias) + 1)),
         "Competencia": [c["texto_auto"] for c in competencias],
-        "Nota": [3] * len(competencias),
+        "Nota": [resp_map.get(c["id"], 3) for c in competencias],
     })
 
     edited = st.data_editor(
@@ -2391,9 +2756,48 @@ def _tab_ingreso_feedback():
         return
 
     st.divider()
-    ef1, ef2 = st.columns(2)
-    ev_nombre = ef1.text_input("Nombre del evaluador", key="ifb_ev_nombre")
-    ev_email  = ef2.text_input("Correo del evaluador", key="ifb_ev_email")
+
+    # Cargar personas de la empresa del grupo seleccionado
+    rut_empresa_fb = grupo_sel.get("rut_empresa")
+    personas_fb = queries.listar_personas_sist(rut_empresa=rut_empresa_fb, solo_con_correo=False)
+    if not personas_fb:
+        personas_fb = queries.listar_personas_sist(solo_con_correo=False)
+
+    # 4 campos como filtros
+    ef1, ef2, ef3, ef4 = st.columns(4)
+    filt_rut    = ef1.text_input("RUT",       key="ifb_rut",     placeholder="Filtrar por RUT")
+    filt_nomb   = ef2.text_input("Nombres",   key="ifb_nombres", placeholder="Filtrar por nombres")
+    filt_apel   = ef3.text_input("Apellidos", key="ifb_apels",   placeholder="Filtrar por apellidos")
+    filt_mail   = ef4.text_input("Correo",    key="ifb_email",   placeholder="Filtrar por correo")
+
+    # Aplicar filtros acumulativos
+    personas_fil = personas_fb
+    for val, campo in [
+        (filt_rut,  "pers_rut"),
+        (filt_nomb, "pers_nombres"),
+        (filt_apel, "pers_apellidos"),
+        (filt_mail, "pers_correo"),
+    ]:
+        if val.strip():
+            personas_fil = [p for p in personas_fil
+                            if val.strip().lower() in (p.get(campo) or "").lower()]
+
+    hay_filtro = any(v.strip() for v in [filt_rut, filt_nomb, filt_apel, filt_mail])
+    persona_ev_sel = st.selectbox(
+        "Evaluador",
+        options=[None] + personas_fil,
+        format_func=lambda p: (
+            f"{p.get('pers_apellidos','')}, {p.get('pers_nombres','')} — {p.get('pers_correo') or 'sin correo'}"
+            if p else ("— Sin coincidencias —" if hay_filtro else "— Escribe en los filtros para buscar —")
+        ),
+        key="ifb_persona_sel",
+        label_visibility="collapsed",
+    )
+
+    ev_rut    = persona_ev_sel["pers_rut"]                                              if persona_ev_sel else filt_rut.strip()
+    ev_nombre = f"{persona_ev_sel.get('pers_nombres','')} {persona_ev_sel.get('pers_apellidos','')}".strip() if persona_ev_sel else f"{filt_nomb.strip()} {filt_apel.strip()}".strip()
+    ev_email  = (persona_ev_sel.get("pers_correo") or "")                               if persona_ev_sel else filt_mail.strip()
+
     st.divider()
 
     df = pd.DataFrame({
@@ -2418,7 +2822,7 @@ def _tab_ingreso_feedback():
 
     if st.button("💾 Guardar Feedback", type="primary", use_container_width=True, key="btn_guardar_fb"):
         if not ev_nombre.strip() or not ev_email.strip():
-            st.warning("Nombre y correo del evaluador son obligatorios.")
+            st.warning("Nombres, apellidos y correo del evaluador son obligatorios.")
         else:
             try:
                 scores = {competencias[i]["id"]: int(row["Nota"]) for i, row in edited.iterrows()}
@@ -2432,7 +2836,11 @@ def _tab_ingreso_feedback():
                     if ev_existente.get("completado"):
                         queries.eliminar_respuestas_feedback(part_sel["id"], ev_id)
                 else:
-                    ev_nuevo = queries.crear_evaluador(part_sel["id"], ev_nombre.strip(), ev_email.strip())
+                    pers_rut_fb = ev_rut.strip() if ev_rut.strip() else None
+                    if not pers_rut_fb:
+                        persona_fb = queries.buscar_persona_por_correo(ev_email.strip())
+                        pers_rut_fb = persona_fb["pers_rut"] if persona_fb else None
+                    ev_nuevo = queries.crear_evaluador(part_sel["id"], ev_nombre.strip(), ev_email.strip(), pers_rut_fb)
                     ev_id = ev_nuevo["id"]
                 queries.guardar_respuestas_feedback(part_sel["id"], ev_id, scores)
                 queries.actualizar_evaluador(ev_id, {"completado": True})
@@ -2460,11 +2868,97 @@ def pagina_ingresos_especiales():
 
 
 # ============================================================
+# PÁGINA: MANTENEDORES
+# ============================================================
+
+def pagina_mantenedores():
+    import pandas as pd
+    st.header("Mantenedores")
+    tab_personas, tab_empresas = st.tabs(["Personas", "Empresas"])
+
+    # ----------------------------------------------------------
+    # TAB PERSONAS (sist_personas)
+    # ----------------------------------------------------------
+    with tab_personas:
+        st.markdown("Personas registradas en el sistema compartido de Asistencias.")
+
+        empresas_otec = queries.listar_empresas_otec()
+        empresa_map = {e["rut_empresa"]: e["nombre_empresa"] for e in empresas_otec}
+
+        personas = queries.listar_personas_sist(solo_con_correo=False)  # todas, incluye sin correo
+
+        if personas:
+            rows_p = []
+            for p in personas:
+                rows_p.append({
+                    "RUT": p.get("pers_rut", ""),
+                    "Nombres": p.get("pers_nombres", ""),
+                    "Apellidos": p.get("pers_apellidos", ""),
+                    "Correo": p.get("pers_correo") or "⚠ sin correo",
+                    "Empresa": empresa_map.get(p.get("rut_empresa") or "", p.get("rut_empresa") or "—"),
+                })
+            df_p = pd.DataFrame(rows_p)
+            st.dataframe(df_p, use_container_width=True, hide_index=True)
+            st.caption(f"{len(personas)} persona(s) registrada(s).")
+        else:
+            st.info("No hay personas registradas aún.")
+
+        st.divider()
+
+        # Formulario crear / editar persona
+        with st.expander("➕ Crear o editar persona"):
+            with st.form("form_persona"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    p_rut = st.text_input("RUT (sin puntos, con guión)", placeholder="12345678-9")
+                    p_nombres = st.text_input("Nombres")
+                    p_apellidos = st.text_input("Apellidos")
+                with col2:
+                    p_correo = st.text_input("Correo electrónico")
+                    empresa_opts = [None] + empresas_otec
+                    p_empresa_sel = st.selectbox(
+                        "Empresa (opcional)",
+                        options=empresa_opts,
+                        format_func=lambda e: e["nombre_empresa"] if e else "— Sin empresa —",
+                    )
+                submitted = st.form_submit_button("Guardar persona", use_container_width=True, type="primary")
+                if submitted:
+                    if not p_rut.strip() or not p_nombres.strip() or not p_apellidos.strip() or not p_correo.strip():
+                        st.warning("Completa RUT, Nombres, Apellidos y Correo.")
+                    else:
+                        rut_emp = p_empresa_sel["rut_empresa"] if p_empresa_sel else None
+                        queries.crear_persona_sist(
+                            p_rut.strip(), p_nombres.strip(), p_apellidos.strip(),
+                            p_correo.strip(), rut_emp,
+                        )
+                        st.success(f"✅ Persona {p_nombres.strip()} {p_apellidos.strip()} guardada.")
+                        st.rerun()
+
+    # ----------------------------------------------------------
+    # TAB EMPRESAS (otec_empresas — solo lectura)
+    # ----------------------------------------------------------
+    with tab_empresas:
+        st.markdown("Empresas registradas en el sistema OTEC (solo lectura desde esta app).")
+        empresas = queries.listar_empresas_otec()
+        if empresas:
+            df_e = pd.DataFrame([
+                {"RUT Empresa": e["rut_empresa"], "Nombre Empresa": e["nombre_empresa"]}
+                for e in empresas
+            ])
+            st.dataframe(df_e, use_container_width=True, hide_index=True)
+            st.caption(f"{len(empresas)} empresa(s) registrada(s). Para crear o editar empresas, usa la app Gestión OTEC.")
+        else:
+            st.info("No hay empresas registradas.")
+
+
+# ============================================================
 # ROUTER
 # ============================================================
 
 if menu == "Inicio":
     pagina_inicio()
+elif menu == "Mantenedores":
+    pagina_mantenedores()
 elif menu == "Ingreso Encuestas":
     pagina_plantillas()
 elif menu == "Ingreso Participantes":
