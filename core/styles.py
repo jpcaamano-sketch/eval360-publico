@@ -80,7 +80,7 @@ FEEDBACK_CSS = """
     [data-testid="stStatusWidget"]   { display: none !important; }
     .block-container {
         max-width: 900px;
-        padding-top: 3rem;
+        padding-top: 1.5rem;
     }
 """ + EVAL_TABLE_CSS + """
 </style>
