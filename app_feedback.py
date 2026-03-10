@@ -4,6 +4,7 @@ Puerto: 8508
 Acceso público con token de evaluador.
 """
 
+import random
 import streamlit as st
 from datetime import datetime, timezone
 from core.config import ESCALA
@@ -13,6 +14,8 @@ from core import queries
 st.set_page_config(page_title="Feedback 360°", page_icon="💬", layout="centered")
 st.markdown(FEEDBACK_CSS, unsafe_allow_html=True)
 
+ESCALA_OPCIONES = list(ESCALA.values())
+
 # ============================================================
 # OBTENER TOKEN
 # ============================================================
@@ -20,6 +23,7 @@ st.markdown(FEEDBACK_CSS, unsafe_allow_html=True)
 token = st.query_params.get("token")
 
 if not token:
+    pass  # titulo removido
     st.warning("Acceso no válido. Utiliza el enlace que recibiste por email.")
     st.stop()
 
@@ -30,10 +34,12 @@ if not token:
 evaluador = queries.obtener_evaluador_por_token(token)
 
 if not evaluador:
+    pass  # titulo removido
     st.error("Token no válido o expirado.")
     st.stop()
 
 if evaluador["completado"]:
+    pass  # titulo removido
     st.success(f"¡Gracias, {evaluador['nombre']}! Tu evaluación ya fue completada.")
     st.balloons()
     st.stop()
@@ -59,34 +65,67 @@ if not competencias:
     st.stop()
 
 # ============================================================
-# FORMULARIO
+# FORMULARIO TIPO TABLA
 # ============================================================
+
 
 st.title("Feedback 360°")
 st.markdown(f"**Hola, {evaluador['nombre']}** — Estás evaluando a **{participante_nombre}**. Tu feedback es **anónimo**.")
 st.markdown("Responde según la frecuencia con la que observas la conducta.")
 st.divider()
 
+# Orden fijo según plantilla
+competencias_shuffle = list(competencias)
+
+# Cabecera de tabla
+hc = st.columns([0.4, 4.5, 0.8, 0.8, 0.8, 1.0, 0.8])
+hc[0].markdown("**#**")
+hc[1].markdown("**Competencia**")
+hc[2].markdown("**Nunca**")
+hc[3].markdown("**Rara vez**")
+hc[4].markdown("**A veces**")
+hc[5].markdown("**Frecuent.**")
+hc[6].markdown("**Siempre**")
+st.markdown("---")
+
 respuestas = {}
 todas_respondidas = True
 
-for idx, comp in enumerate(competencias, 1):
+
+def make_fb_callback(cid, val):
+    """Callback para exclusión mutua: al marcar una opción, desmarca las demás."""
+    def cb():
+        if st.session_state.get(f"fb_{cid}_{val}"):
+            for v in range(1, 6):
+                if v != val:
+                    st.session_state[f"fb_{cid}_{v}"] = False
+    return cb
+
+
+for idx, comp in enumerate(competencias_shuffle, 1):
     cid = comp["id"]
-    st.markdown(f"**{idx}.** {comp['texto_feedback']}")
-    val = st.radio(
-        label=f"r{idx}",
-        options=[1, 2, 3, 4, 5],
-        format_func=lambda v: ESCALA[v],
-        key=f"fb_{cid}",
-        horizontal=True,
-        index=None,
-        label_visibility="collapsed",
-    )
-    if val is not None:
-        respuestas[cid] = val
+    rc = st.columns([0.4, 4.5, 0.8, 0.8, 0.8, 1.0, 0.8])
+    with rc[0]:
+        st.markdown(f"**{idx}**")
+    with rc[1]:
+        st.markdown(comp["texto_feedback"])
+    for col_idx, val in enumerate(range(1, 6)):
+        with rc[col_idx + 2]:
+            st.checkbox(
+                " ",
+                key=f"fb_{cid}_{val}",
+                on_change=make_fb_callback(cid, val),
+                label_visibility="hidden",
+            )
+    sel_val = None
+    for v in range(1, 6):
+        if st.session_state.get(f"fb_{cid}_{v}"):
+            sel_val = v
+            break
+    if sel_val is not None:
+        respuestas[cid] = sel_val
     else:
         todas_respondidas = False
-    st.markdown("---")
 
 st.divider()
 
