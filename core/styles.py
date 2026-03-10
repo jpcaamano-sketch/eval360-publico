@@ -38,8 +38,12 @@ EVAL_TABLE_CSS = """
     [data-testid="stHorizontalBlock"] > [data-testid="column"]:nth-child(n+3) p {
         text-align: center !important;
         width: 100% !important;
-        font-size: 0.72rem !important;
+        font-size: 0.62rem !important;
         white-space: nowrap !important;
+        overflow: hidden !important;
+    }
+    [data-testid="stHorizontalBlock"] > [data-testid="column"]:nth-child(n+3) p strong {
+        font-size: 0.62rem !important;
     }
     [data-testid="stCheckbox"] {
         display: inline-flex !important;
