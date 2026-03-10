@@ -36,7 +36,7 @@ MENU_OPTIONS = [
     "Inicio",
     "Mantenedores",
     "Ingreso Encuestas",
-    "Ingreso Participantes",
+    "Ingreso de Grupos",
     "Seguimiento Autoevaluaciones",
     "Seguimiento Feedback",
     "Informe Final 360",
@@ -320,9 +320,9 @@ def pagina_grupos():
     if "grupo_detalle" not in st.session_state:
         st.session_state["grupo_detalle"] = None
 
-    st.header("Ingreso Participantes")
+    st.header("Ingreso de Grupos")
 
-    tab_lista, tab_nuevo = st.tabs(["Grupos existentes", "Crear nuevo"])
+    tab_lista, tab_nuevo = st.tabs(["Grupos existentes", "Crear nuevo grupo"])
 
     with tab_nuevo:
         import pandas as pd
@@ -433,7 +433,7 @@ def pagina_grupos():
         import pandas as pd
         grupos = queries.listar_grupos()
         if not grupos:
-            st.info("No hay grupos. Crea uno en la pestaña 'Crear nuevo'.")
+            st.info("No hay grupos. Crea uno en la pestaña 'Crear nuevo grupo'.")
             return
 
         rows_orig = []
@@ -2352,7 +2352,7 @@ def _contenido_importar_participantes():
     # ---- Selección empresa → grupo ----
     grupos = queries.listar_grupos()
     if not grupos:
-        st.warning("No hay grupos creados. Crea uno primero en Ingreso Participantes.")
+        st.warning("No hay grupos creados. Crea uno primero en Ingreso de Grupos.")
         return
 
     empresas = sorted({g.get("empresa") or "—" for g in grupos})
@@ -2891,7 +2891,7 @@ elif menu == "Mantenedores":
     pagina_mantenedores()
 elif menu == "Ingreso Encuestas":
     pagina_plantillas()
-elif menu == "Ingreso Participantes":
+elif menu == "Ingreso de Grupos":
     pagina_grupos()
 elif menu == "Ingresos Especiales":
     pagina_ingresos_especiales()
