@@ -54,6 +54,10 @@ AUTO_CSS = """
 <style>
     .stApp {
         background-color: #e8f4f8;
+        color: #000000 !important;
+    }
+    .stApp p, .stApp label, .stApp span, .stApp div {
+        color: #000000 !important;
     }
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
@@ -78,6 +82,10 @@ FEEDBACK_CSS = """
 <style>
     .stApp {
         background-color: #e8f4f8;
+        color: #000000 !important;
+    }
+    .stApp p, .stApp label, .stApp span, .stApp div {
+        color: #000000 !important;
     }
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
