@@ -29,25 +29,24 @@ ADMIN_CSS = """
 """
 
 EVAL_TABLE_CSS = """
-    /* Radio buttons horizontales: wrap en mobile */
-    [data-testid="stRadio"] > div {
-        flex-wrap: wrap !important;
-        gap: 0.4rem 1.2rem !important;
+    /* Centrar contenido en columnas de escala (3ra en adelante) */
+    [data-testid="stHorizontalBlock"] > [data-testid="column"]:nth-child(n+3) [data-testid="stElementContainer"] {
+        display: flex !important;
+        justify-content: center !important;
+        text-align: center !important;
     }
-    [data-testid="stRadio"] label {
-        font-size: 0.9rem !important;
+    [data-testid="stHorizontalBlock"] > [data-testid="column"]:nth-child(n+3) p {
+        text-align: center !important;
+        width: 100% !important;
+        font-size: 0.62rem !important;
         white-space: nowrap !important;
+        overflow: hidden !important;
     }
-    /* Reducir padding en mobile */
-    @media (max-width: 640px) {
-        .block-container {
-            padding-left: 1rem !important;
-            padding-right: 1rem !important;
-            padding-top: 2rem !important;
-        }
-        [data-testid="stRadio"] label {
-            font-size: 0.82rem !important;
-        }
+    [data-testid="stHorizontalBlock"] > [data-testid="column"]:nth-child(n+3) p strong {
+        font-size: 0.62rem !important;
+    }
+    [data-testid="stCheckbox"] {
+        display: inline-flex !important;
     }
 """
 
