@@ -334,7 +334,7 @@ def pagina_grupos():
 
     st.header("Ingreso Participantes")
 
-    tab_lista, tab_nuevo, tab_agregar = st.tabs(["Grupos existentes", "Crear nuevo", "Agregar Participante"])
+    tab_lista, tab_nuevo = st.tabs(["Grupos existentes", "Crear nuevo"])
 
     with tab_nuevo:
         import pandas as pd
@@ -522,73 +522,6 @@ def pagina_grupos():
                 st.success(f"✅ {len(a_sel)} grupo(s) eliminado(s).")
                 st.rerun()
 
-    with tab_agregar:
-        import pandas as pd
-        st.markdown("#### Agregar participante a grupo existente")
-
-        grupos_ag = queries.listar_grupos()
-        if not grupos_ag:
-            st.warning("No hay grupos creados.")
-        else:
-            grupo_ag = st.selectbox(
-                "Selecciona el grupo",
-                options=grupos_ag,
-                format_func=lambda g: f"{g['nombre']} — {g.get('empresa') or 'Sin empresa'}",
-                key="ag_grupo",
-            )
-
-            if grupo_ag:
-                grupo_id_ag = grupo_ag["id"]
-                participantes_ag = queries.listar_participantes(grupo_id_ag)
-                enrolled_ruts_ag = {p["pers_rut"] for p in participantes_ag if p.get("pers_rut")}
-
-                st.markdown(f"**Participantes actuales:** {len(participantes_ag)}")
-
-                # Buscar persona existente
-                st.divider()
-                st.markdown("**Opción 1 — Agregar persona existente**")
-                rut_empresa_ag = grupo_ag.get("rut_empresa")
-                personas_ag = queries.listar_personas_sist(rut_empresa=rut_empresa_ag)
-                if not personas_ag:
-                    personas_ag = queries.listar_personas_sist()
-
-                disponibles_ag = [p for p in personas_ag if p["pers_rut"] not in enrolled_ruts_ag]
-                disponibles_ag = sorted(disponibles_ag, key=lambda p: (p.get("pers_apellidos") or "").lower())
-
-                if not disponibles_ag:
-                    st.info("Todas las personas disponibles ya están en este grupo.")
-                else:
-                    persona_ag = st.selectbox(
-                        "Persona",
-                        options=[None] + disponibles_ag,
-                        format_func=lambda p: f"{p['pers_apellidos']}, {p['pers_nombres']} — {p['pers_correo']}" if p else "— Selecciona —",
-                        key="ag_persona",
-                    )
-                    if st.button("➕ Agregar al grupo", key="ag_btn_add", type="primary"):
-                        if persona_ag:
-                            queries.crear_participante(grupo_id_ag, persona_ag["pers_rut"])
-                            st.success(f"✅ {persona_ag['pers_nombres']} {persona_ag['pers_apellidos']} agregado/a.")
-                            st.rerun()
-                        else:
-                            st.warning("Selecciona una persona.")
-
-                # Crear persona nueva
-                st.divider()
-                st.markdown("**Opción 2 — Crear persona nueva y agregar**")
-                with st.form("form_nueva_persona_ag"):
-                    c1, c2, c3, c4 = st.columns(4)
-                    nr = c1.text_input("RUT")
-                    nn = c2.text_input("Nombres")
-                    na = c3.text_input("Apellidos")
-                    nc = c4.text_input("Correo")
-                    if st.form_submit_button("Crear y agregar", use_container_width=True):
-                        if nr.strip() and nn.strip() and na.strip() and nc.strip():
-                            queries.crear_persona_sist(nr.strip(), nn.strip(), na.strip(), nc.strip(), rut_empresa_ag)
-                            queries.crear_participante(grupo_id_ag, nr.strip())
-                            st.success(f"✅ {nn.strip()} {na.strip()} creado/a y agregado/a al grupo.")
-                            st.rerun()
-                        else:
-                            st.warning("Todos los campos son obligatorios.")
 
 
 def _detalle_grupo(grupo_id):
