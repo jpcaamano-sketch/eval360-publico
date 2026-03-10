@@ -77,12 +77,12 @@ AUTO_CSS = """
 FEEDBACK_CSS = """
 <style>
     .stApp {
-        background-color: #f0f8e8;
+        background-color: #e8f4f8;
     }
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {
-        background-color: #f0f8e8 !important;
+        background-color: #e8f4f8 !important;
         border-bottom: none !important;
         box-shadow: none !important;
     }
@@ -92,7 +92,7 @@ FEEDBACK_CSS = """
     [data-testid="stStatusWidget"]   { display: none !important; }
     .block-container {
         max-width: 900px;
-        padding-top: 1.5rem;
+        padding-top: 3rem;
     }
 """ + EVAL_TABLE_CSS + """
 </style>
