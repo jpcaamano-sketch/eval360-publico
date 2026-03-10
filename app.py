@@ -34,7 +34,7 @@ st.markdown(ADMIN_CSS, unsafe_allow_html=True)
 
 MENU_OPTIONS = [
     "Inicio",
-    "Mantenedores",
+    "Personas y Empresas",
     "Ingreso Encuestas",
     "Ingreso de Grupos",
     "Seguimiento Autoevaluaciones",
@@ -538,7 +538,7 @@ def _detalle_grupo(grupo_id):
     if huerfanos:
         st.warning(
             f"⚠️ **{len(huerfanos)} participante(s) sin vincular** a sist_personas (datos previos a la migración). "
-            "Elimínalos o vincúlalos desde Mantenedores."
+            "Elimínalos o vincúlalos desde Personas y Empresas."
         )
 
     # Cargar personas disponibles (filtradas por empresa, fallback todas)
@@ -2738,7 +2738,7 @@ def pagina_ingresos_especiales():
 
 def pagina_mantenedores():
     import pandas as pd
-    st.header("Mantenedores")
+    st.header("Personas y Empresas")
     tab_personas, tab_empresas = st.tabs(["Personas", "Empresas"])
 
     # ----------------------------------------------------------
@@ -2822,7 +2822,7 @@ def pagina_mantenedores():
 
 if menu == "Inicio":
     pagina_inicio()
-elif menu == "Mantenedores":
+elif menu == "Personas y Empresas":
     pagina_mantenedores()
 elif menu == "Ingreso Encuestas":
     pagina_plantillas()
