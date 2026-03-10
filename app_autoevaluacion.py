@@ -67,7 +67,7 @@ if not competencias:
 
 st.title("Autoevaluación 360°")
 st.markdown(f"**Hola, {participante.get('nombre', '')}**")
-st.markdown("Responde cada afirmación según la frecuencia con la que aplica a ti.")
+st.markdown("Responde cada afirmación según la frecuencia con la que aplica a ti. Y anotar los datos de las personas que te evaluarán.")
 st.divider()
 
 # Orden fijo según plantilla
