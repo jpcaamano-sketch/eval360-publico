@@ -31,7 +31,13 @@ ADMIN_CSS = """
 EVAL_TABLE_CSS = """
     /* Centrar contenido en columnas de escala (3ra en adelante) */
     [data-testid="stHorizontalBlock"] > [data-testid="column"]:nth-child(n+3) [data-testid="stElementContainer"] {
+        display: flex !important;
+        justify-content: center !important;
         text-align: center !important;
+    }
+    [data-testid="stHorizontalBlock"] > [data-testid="column"]:nth-child(n+3) p {
+        text-align: center !important;
+        width: 100% !important;
     }
     [data-testid="stCheckbox"] {
         display: inline-flex !important;
