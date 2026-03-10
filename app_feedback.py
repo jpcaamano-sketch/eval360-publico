@@ -133,7 +133,7 @@ st.divider()
 # GUARDAR
 # ============================================================
 
-if st.button("Enviar Evaluación", use_container_width=True, type="primary"):
+if st.button("Guardar Feedback", use_container_width=True, type="primary"):
     if not todas_respondidas or len(respuestas) < len(competencias):
         st.error("Debes responder todas las competencias antes de enviar.")
     else:
