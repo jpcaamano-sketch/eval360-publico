@@ -617,24 +617,6 @@ def _detalle_grupo(grupo_id):
                 st.success(f"✅ {len(nuevos_ruts)} participante(s) agregado(s).")
                 st.rerun()
 
-    with st.expander("Crear persona nueva en Asistencias"):
-        with st.form(f"form_crear_persona_grupo_{grupo_id}"):
-            fp1, fp2, fp3, fp4 = st.columns(4)
-            new_rut = fp1.text_input("RUT")
-            new_nombres = fp2.text_input("Nombres")
-            new_apellidos = fp3.text_input("Apellidos")
-            new_correo = fp4.text_input("Correo")
-            if st.form_submit_button("Crear persona", use_container_width=True):
-                if new_rut.strip() and new_nombres.strip() and new_apellidos.strip() and new_correo.strip():
-                    queries.crear_persona_sist(
-                        new_rut.strip(), new_nombres.strip(), new_apellidos.strip(),
-                        new_correo.strip(), rut_empresa_grupo,
-                    )
-                    st.success(f"✅ {new_nombres.strip()} {new_apellidos.strip()} creada/o.")
-                    st.rerun()
-                else:
-                    st.warning("RUT, nombres, apellidos y correo son obligatorios.")
-
     st.divider()
 
     # --- 3. Botones de proceso (vertical) ---
