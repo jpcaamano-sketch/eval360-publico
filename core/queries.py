@@ -141,15 +141,20 @@ def listar_competencias(categoria_id):
 
 @con_reintento
 def listar_competencias_por_plantilla(plantilla_id):
-    """Lista todas las competencias de una plantilla ordenadas globalmente por orden."""
+    """Lista todas las competencias de una plantilla en orden global intercalado.
+
+    Orden: primero por comp.orden (ronda 1, 2, 3...), luego por cat.orden (categoria 1, 2...).
+    Resultado: Cat1-R1, Cat2-R1, Cat3-R1, ..., Cat1-R2, Cat2-R2, ... (intercalado entre categorías).
+    """
     categorias = listar_categorias(plantilla_id)
     resultado = []
     for cat in categorias:
         comps = listar_competencias(cat["id"])
         for comp in comps:
             comp["categoria_nombre"] = cat["nombre"]
+            comp["_cat_orden"] = cat.get("orden", 0)
         resultado.extend(comps)
-    return sorted(resultado, key=lambda c: c.get("orden", 0))
+    return sorted(resultado, key=lambda c: (c.get("orden", 0), c.get("_cat_orden", 0)))
 
 
 @con_reintento
