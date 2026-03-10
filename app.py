@@ -2540,46 +2540,28 @@ def _tab_ingreso_feedback():
 
     st.divider()
 
-    # Cargar personas de la empresa del grupo seleccionado
-    rut_empresa_fb = grupo_sel.get("rut_empresa")
-    personas_fb = queries.listar_personas_sist(rut_empresa=rut_empresa_fb, solo_con_correo=False)
-    if not personas_fb:
-        personas_fb = queries.listar_personas_sist(solo_con_correo=False)
+    # Mostrar evaluadores ya registrados para este participante
+    evs = queries.listar_evaluadores(part_sel["id"])
+    if not evs:
+        st.info("Este participante no tiene evaluadores registrados.")
+        return
 
-    # 4 campos como filtros
-    ef1, ef2, ef3, ef4 = st.columns(4)
-    filt_rut    = ef1.text_input("RUT",       key="ifb_rut",     placeholder="Filtrar por RUT")
-    filt_nomb   = ef2.text_input("Nombres",   key="ifb_nombres", placeholder="Filtrar por nombres")
-    filt_apel   = ef3.text_input("Apellidos", key="ifb_apels",   placeholder="Filtrar por apellidos")
-    filt_mail   = ef4.text_input("Correo",    key="ifb_email",   placeholder="Filtrar por correo")
-
-    # Aplicar filtros acumulativos
-    personas_fil = personas_fb
-    for val, campo in [
-        (filt_rut,  "pers_rut"),
-        (filt_nomb, "pers_nombres"),
-        (filt_apel, "pers_apellidos"),
-        (filt_mail, "pers_correo"),
-    ]:
-        if val.strip():
-            personas_fil = [p for p in personas_fil
-                            if val.strip().lower() in (p.get(campo) or "").lower()]
-
-    hay_filtro = any(v.strip() for v in [filt_rut, filt_nomb, filt_apel, filt_mail])
     persona_ev_sel = st.selectbox(
         "Evaluador",
-        options=[None] + personas_fil,
-        format_func=lambda p: (
-            f"{p.get('pers_apellidos','')}, {p.get('pers_nombres','')} — {p.get('pers_correo') or 'sin correo'}"
-            if p else ("— Sin coincidencias —" if hay_filtro else "— Escribe en los filtros para buscar —")
+        options=[None] + evs,
+        format_func=lambda e: (
+            f"{e.get('nombre','—')} — {e.get('email','—')}"
+            if e else "— Selecciona evaluador —"
         ),
         key="ifb_persona_sel",
-        label_visibility="collapsed",
     )
 
-    ev_rut    = persona_ev_sel["pers_rut"]                                              if persona_ev_sel else filt_rut.strip()
-    ev_nombre = f"{persona_ev_sel.get('pers_nombres','')} {persona_ev_sel.get('pers_apellidos','')}".strip() if persona_ev_sel else f"{filt_nomb.strip()} {filt_apel.strip()}".strip()
-    ev_email  = (persona_ev_sel.get("pers_correo") or "")                               if persona_ev_sel else filt_mail.strip()
+    if not persona_ev_sel:
+        return
+
+    ev_rut    = persona_ev_sel.get("pers_rut") or ""
+    ev_nombre = persona_ev_sel.get("nombre", "")
+    ev_email  = persona_ev_sel.get("email", "")
 
     st.divider()
 
@@ -2638,7 +2620,7 @@ def pagina_ingresos_especiales():
 
     tab_auto, tab_fb = st.tabs([
         "Ingreso Respuesta Autoevaluación",
-        "Ingreso Feedback",
+        "Ingreso Respuestas Feedback",
     ])
 
     with tab_auto:
