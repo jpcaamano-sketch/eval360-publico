@@ -462,7 +462,7 @@ def pagina_grupos():
                 "Participantes": n_parts,
             })
 
-        st.caption("Marca ✓ un grupo y pulsa **📂 Abrir** para ver y agregar participantes.")
+        st.caption("Marca ✓ un grupo y pulsa **Editar** para ver y agregar participantes.")
         df_orig = pd.DataFrame(rows_orig)
 
         edited_df = st.data_editor(
@@ -487,17 +487,17 @@ def pagina_grupos():
 
         with col_abrir:
             if st.button(
-                "📂 Abrir",
+                "Editar",
                 use_container_width=True,
                 type="primary",
                 disabled=(len(a_sel) != 1),
-                help="Marca un grupo para abrirlo y agregar participantes",
+                help="Marca un grupo para editarlo y agregar participantes",
             ):
                 st.session_state["grupo_detalle"] = grupos[a_sel[0]]["id"]
                 st.rerun()
 
         with col_grabar:
-            if st.button("💾 Grabar", use_container_width=True):
+            if st.button("Grabar", use_container_width=True):
                 cambios = 0
                 for idx, (orig, edit) in enumerate(zip(rows_orig, edited_df.to_dict("records"))):
                     if edit["Nombre"] != orig["Nombre"]:
@@ -513,7 +513,7 @@ def pagina_grupos():
 
         with col_eliminar:
             if st.button(
-                f"🗑️ Eliminar ({len(a_sel)})" if a_sel else "🗑️ Eliminar",
+                f"Eliminar ({len(a_sel)})" if a_sel else "Eliminar",
                 use_container_width=True,
                 disabled=(len(a_sel) == 0),
             ):
@@ -604,7 +604,7 @@ def _detalle_grupo(grupo_id):
     st.markdown(f"#### {grupo['nombre']} · {empresa_nombre} · Plantilla: {plantilla_nombre} · Estado: {grupo['estado']}")
 
     # --- 0. Edición del grupo ---
-    with st.expander("✏️ Editar datos del grupo"):
+    with st.expander("Editar datos del grupo"):
         todas_pl = queries.listar_plantillas()
         nombres_pl = sorted([p["nombre"] for p in todas_pl], key=lambda n: n.lower())
         plantilla_actual_nombre = (
@@ -634,7 +634,7 @@ def _detalle_grupo(grupo_id):
                 index=idx_pl,
                 key=f"sel_plantilla_{grupo_id}",
             )
-            if st.form_submit_button("💾 Guardar cambios", use_container_width=True):
+            if st.form_submit_button("Guardar cambios", use_container_width=True):
                 nueva_plantilla_id = next(
                     (p["id"] for p in todas_pl if p["nombre"] == nueva_plantilla_nombre), None
                 )
@@ -720,7 +720,7 @@ def _detalle_grupo(grupo_id):
             key=f"part_editor_{grupo_id}",
         )
 
-        if st.button("💾 Grabar", use_container_width=True, type="primary", key=f"grabar_part_{grupo_id}"):
+        if st.button("Grabar", use_container_width=True, type="primary", key=f"grabar_part_{grupo_id}"):
             nuevos_ruts = [
                 todas_personas_ord[idx]["pers_rut"]
                 for idx in range(len(rows_part))
@@ -734,7 +734,7 @@ def _detalle_grupo(grupo_id):
                 st.success(f"✅ {len(nuevos_ruts)} participante(s) agregado(s).")
                 st.rerun()
 
-    with st.expander("➕ Crear persona nueva en Asistencias"):
+    with st.expander("Crear persona nueva en Asistencias"):
         with st.form(f"form_crear_persona_grupo_{grupo_id}"):
             fp1, fp2, fp3, fp4 = st.columns(4)
             new_rut = fp1.text_input("RUT")
