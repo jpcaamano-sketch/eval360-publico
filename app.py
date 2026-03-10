@@ -2461,88 +2461,6 @@ def _cascada_ingresos(prefix):
     return grupo_sel, part_sel
 
 
-def _tab_ingreso_evaluadores():
-    grupo_sel, part_sel = _cascada_ingresos("iev")
-    if not grupo_sel or not part_sel:
-        return
-
-    st.divider()
-    evs = queries.listar_evaluadores(part_sel["id"])
-    st.markdown(f"**Evaluadores de {part_sel['nombre']}** — {len(evs)} registrado(s)")
-
-    if evs:
-        for ev in evs:
-            ec1, ec2, ec3 = st.columns([3, 3, 1])
-            ec1.write(ev.get("nombre", "—"))
-            ec2.write(ev.get("email", "—"))
-            if ec3.button("🗑️", key=f"del_ev_{ev['id']}"):
-                try:
-                    queries.eliminar_evaluador(ev["id"])
-                    st.rerun()
-                except Exception as ex:
-                    st.error(f"Error: {ex}")
-    else:
-        st.info("Sin evaluadores registrados.")
-
-    st.divider()
-    emails_existentes_ev = {e["email"].strip().lower() for e in evs}
-
-    # Agregar desde sist_personas
-    st.markdown("**Agregar evaluador desde Asistencias:**")
-    rut_empresa_ev = grupo_sel.get("rut_empresa")
-    personas_ev = [
-        p for p in queries.listar_personas_sist(rut_empresa=rut_empresa_ev)
-        if p.get("pers_correo", "").lower() not in emails_existentes_ev
-    ]
-    pe1, pe2 = st.columns([4, 1])
-    with pe1:
-        persona_ev_sel = st.selectbox(
-            "Persona",
-            options=personas_ev if personas_ev else [None],
-            format_func=lambda p: (
-                f"{p['pers_apellidos']}, {p['pers_nombres']} — {p['pers_correo']}"
-                if p else "— No hay personas disponibles —"
-            ),
-            key="iev_persona_sel",
-            label_visibility="collapsed",
-        )
-    with pe2:
-        if st.button("➕ Agregar", use_container_width=True,
-                     disabled=(persona_ev_sel is None), key="iev_btn_persona"):
-            ev_n = f"{persona_ev_sel['pers_nombres']} {persona_ev_sel['pers_apellidos']}".strip()
-            try:
-                queries.crear_evaluador(part_sel["id"], ev_n,
-                                        persona_ev_sel["pers_correo"],
-                                        persona_ev_sel["pers_rut"])
-                st.success(f"✅ {ev_n} agregado.")
-                st.rerun()
-            except Exception as ex:
-                st.error(f"Error: {ex}")
-
-    st.divider()
-    st.markdown("**O ingresar manualmente (si no está en el sistema):**")
-    with st.form("form_ev_directo", clear_on_submit=True):
-        fa1, fa2 = st.columns(2)
-        ev_nombre = fa1.text_input("Nombre")
-        ev_email  = fa2.text_input("Correo")
-        if st.form_submit_button("➕ Agregar manual", use_container_width=True):
-            if ev_nombre.strip() and ev_email.strip():
-                if ev_email.strip().lower() in emails_existentes_ev:
-                    st.warning("Ya existe un evaluador con ese correo para este participante.")
-                else:
-                    try:
-                        persona_match = queries.buscar_persona_por_correo(ev_email.strip())
-                        pers_rut_ev = persona_match["pers_rut"] if persona_match else None
-                        queries.crear_evaluador(part_sel["id"], ev_nombre.strip(),
-                                                ev_email.strip(), pers_rut_ev)
-                        st.success(f"✅ {ev_nombre} agregado.")
-                        st.rerun()
-                    except Exception as ex:
-                        st.error(f"Error: {ex}")
-            else:
-                st.warning("Nombre y correo son obligatorios.")
-
-
 def _tab_ingreso_auto():
     import pandas as pd
     grupo_sel, part_sel = _cascada_ingresos("iauto")
@@ -2718,14 +2636,11 @@ def _tab_ingreso_feedback():
 def pagina_ingresos_especiales():
     st.header("Ingresos Especiales")
 
-    tab_ev, tab_auto, tab_fb = st.tabs([
-        "Ingreso Evaluadores",
+    tab_auto, tab_fb = st.tabs([
         "Ingreso Respuesta Autoevaluación",
         "Ingreso Feedback",
     ])
 
-    with tab_ev:
-        _tab_ingreso_evaluadores()
     with tab_auto:
         _tab_ingreso_auto()
     with tab_fb:
