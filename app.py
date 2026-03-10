@@ -529,53 +529,6 @@ def _detalle_grupo(grupo_id):
         st.session_state["grupo_detalle"] = None
         return
 
-    plantilla_nombre = grupo.get("v2_plantillas", {}).get("nombre", "—") if grupo.get("v2_plantillas") else "—"
-    empresa_nombre = grupo.get("empresa") or "—"
-    st.markdown(f"#### {grupo['nombre']} · {empresa_nombre} · Plantilla: {plantilla_nombre} · Estado: {grupo['estado']}")
-
-    # --- 0. Edición del grupo ---
-    with st.expander("Editar datos del grupo"):
-        todas_pl = queries.listar_plantillas()
-        nombres_pl = sorted([p["nombre"] for p in todas_pl], key=lambda n: n.lower())
-        plantilla_actual_nombre = (
-            grupo.get("v2_plantillas", {}).get("nombre", "") if grupo.get("v2_plantillas") else ""
-        )
-        idx_pl = nombres_pl.index(plantilla_actual_nombre) if plantilla_actual_nombre in nombres_pl else 0
-        with st.form(f"form_editar_grupo_{grupo_id}"):
-            eg0, eg1, eg2 = st.columns(3)
-            empresas_otec_edit = queries.listar_empresas_otec()
-            empresa_actual_rut = grupo.get("rut_empresa")
-            idx_emp_edit = 0
-            for _i, _emp in enumerate(empresas_otec_edit):
-                if _emp["rut_empresa"] == empresa_actual_rut:
-                    idx_emp_edit = _i
-                    break
-            nueva_empresa_sel = eg0.selectbox(
-                "Empresa",
-                options=empresas_otec_edit if empresas_otec_edit else [None],
-                index=idx_emp_edit,
-                format_func=lambda e: e["nombre_empresa"] if e else "— Sin empresa —",
-                key=f"sel_empresa_{grupo_id}",
-            )
-            nuevo_nombre = eg1.text_input("Nombre del grupo", value=grupo["nombre"])
-            nueva_plantilla_nombre = eg2.selectbox(
-                "Plantilla",
-                options=nombres_pl,
-                index=idx_pl,
-                key=f"sel_plantilla_{grupo_id}",
-            )
-            if st.form_submit_button("Guardar cambios", use_container_width=True):
-                nueva_plantilla_id = next(
-                    (p["id"] for p in todas_pl if p["nombre"] == nueva_plantilla_nombre), None
-                )
-                queries.actualizar_grupo(grupo_id, {
-                    "rut_empresa": nueva_empresa_sel["rut_empresa"] if nueva_empresa_sel else None,
-                    "nombre": nuevo_nombre.strip(),
-                    "plantilla_id": nueva_plantilla_id,
-                })
-                st.success("Grupo actualizado.")
-                st.rerun()
-
     import pandas as pd
 
     participantes = queries.listar_participantes(grupo_id)
