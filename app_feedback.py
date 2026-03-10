@@ -78,7 +78,7 @@ st.divider()
 competencias_shuffle = list(competencias)
 
 # Cabecera de tabla
-hc = st.columns([0.4, 3.5, 0.9, 0.9, 0.9, 1.2, 0.9])
+hc = st.columns([0.4, 5.0, 0.7, 0.7, 0.7, 0.9, 0.7])
 hc[0].markdown("**#**")
 hc[1].markdown("**Competencia**")
 hc[2].markdown("**Nunca**")
@@ -104,7 +104,7 @@ def make_fb_callback(cid, val):
 
 for idx, comp in enumerate(competencias_shuffle, 1):
     cid = comp["id"]
-    rc = st.columns([0.4, 3.5, 0.9, 0.9, 0.9, 1.2, 0.9])
+    rc = st.columns([0.4, 5.0, 0.7, 0.7, 0.7, 0.9, 0.7])
     with rc[0]:
         st.markdown(f"**{idx}**")
     with rc[1]:
