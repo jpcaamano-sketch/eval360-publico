@@ -2634,6 +2634,7 @@ def _tab_ingreso_evaluadores():
             "#": i,
             "Nombre": ev.get("nombre") or "—",
             "Email": ev.get("email") or "—",
+            "Contestó": "✅ Sí" if ev.get("completado") else "⏳ No",
             "_id": ev["id"],
         })
 
@@ -2648,8 +2649,9 @@ def _tab_ingreso_evaluadores():
                 "#": st.column_config.NumberColumn("#", disabled=True, width="small"),
                 "Nombre": st.column_config.TextColumn("Nombre"),
                 "Email": st.column_config.TextColumn("Email"),
+                "Contestó": st.column_config.TextColumn("Contestó", disabled=True, width="small"),
             },
-            disabled=["#"],
+            disabled=["#", "Contestó"],
             hide_index=True,
             use_container_width=True,
             key=f"ev_editor_{part_sel['id']}",
