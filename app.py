@@ -1637,7 +1637,7 @@ def pagina_informe_final():
             })
         st.dataframe(
             pd.DataFrame(filas),
-            width="stretch",
+            use_container_width=True,
             hide_index=True,
             column_config={
                 "#": st.column_config.NumberColumn("#", width="small"),
