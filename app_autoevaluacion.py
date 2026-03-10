@@ -4,7 +4,6 @@ Puerto: 8507
 Acceso público con token.
 """
 
-import random
 import streamlit as st
 from core.config import ESCALA
 from core.styles import AUTO_CSS
@@ -13,8 +12,6 @@ from core import queries
 st.set_page_config(page_title="Autoevaluación 360°", page_icon="📝", layout="centered")
 st.markdown(AUTO_CSS, unsafe_allow_html=True)
 
-ESCALA_OPCIONES = list(ESCALA.values())  # ["Nunca", "Rara vez", "A veces", "Frecuentemente", "Siempre"]
-
 # ============================================================
 # OBTENER TOKEN
 # ============================================================
@@ -22,7 +19,6 @@ ESCALA_OPCIONES = list(ESCALA.values())  # ["Nunca", "Rara vez", "A veces", "Fre
 token = st.query_params.get("token")
 
 if not token:
-    pass  # titulo removido
     st.warning("Acceso no válido. Utiliza el enlace que recibiste por email.")
     st.stop()
 
@@ -33,12 +29,10 @@ if not token:
 participante = queries.obtener_participante_por_token(token)
 
 if not participante:
-    pass  # titulo removido
     st.error("Token no válido o expirado.")
     st.stop()
 
 if participante["autoevaluacion_completada"]:
-    pass  # titulo removido
     st.success(f"¡Gracias, {participante.get('nombre', '')}! Tu autoevaluación ya fue completada.")
     st.balloons()
     st.stop()
@@ -61,69 +55,36 @@ if not competencias:
     st.stop()
 
 # ============================================================
-# FORMULARIO TIPO TABLA
+# FORMULARIO
 # ============================================================
-
 
 st.title("Autoevaluación 360°")
 st.markdown(f"**Hola, {participante.get('nombre', '')}**")
 st.markdown("Responde cada afirmación según la frecuencia con la que aplica a ti. Y anotar los datos de las personas que te evaluarán.")
 st.divider()
 
-# Orden fijo según plantilla
-competencias_shuffle = list(competencias)
-
-# Cabecera de tabla
-hc = st.columns([0.4, 4.5, 0.8, 0.8, 0.8, 1.0, 0.8])
-hc[0].markdown("**#**")
-hc[1].markdown("**Competencia**")
-hc[2].markdown("**Nunca**")
-hc[3].markdown("**Rara vez**")
-hc[4].markdown("**A veces**")
-hc[5].markdown("**Frecuent.**")
-hc[6].markdown("**Siempre**")
-st.markdown("---")
+OPCIONES = list(ESCALA.values())  # ["Nunca", "Rara vez", "A veces", "Frecuentemente", "Siempre"]
 
 respuestas = {}
 todas_respondidas = True
 
-
-def make_auto_callback(cid, val):
-    """Callback para exclusión mutua: al marcar una opción, desmarca las demás."""
-    def cb():
-        if st.session_state.get(f"auto_{cid}_{val}"):
-            for v in range(1, 6):
-                if v != val:
-                    st.session_state[f"auto_{cid}_{v}"] = False
-    return cb
-
-
-for idx, comp in enumerate(competencias_shuffle, 1):
+for idx, comp in enumerate(competencias, 1):
     cid = comp["id"]
-    rc = st.columns([0.4, 4.5, 0.8, 0.8, 0.8, 1.0, 0.8])
-    with rc[0]:
-        st.markdown(f"**{idx}**")
-    with rc[1]:
-        st.markdown(comp["texto_auto"])
-    for col_idx, val in enumerate(range(1, 6)):
-        with rc[col_idx + 2]:
-            st.checkbox(
-                " ",
-                key=f"auto_{cid}_{val}",
-                on_change=make_auto_callback(cid, val),
-                label_visibility="hidden",
-            )
-    sel_val = None
-    for v in range(1, 6):
-        if st.session_state.get(f"auto_{cid}_{v}"):
-            sel_val = v
-            break
-    if sel_val is not None:
-        respuestas[cid] = sel_val
+    st.markdown(f"**{idx}.** {comp['texto_auto']}")
+    val = st.radio(
+        label=f"r{idx}",
+        options=[1, 2, 3, 4, 5],
+        format_func=lambda v: ESCALA[v],
+        key=f"auto_{cid}",
+        horizontal=True,
+        index=None,
+        label_visibility="collapsed",
+    )
+    if val is not None:
+        respuestas[cid] = val
     else:
         todas_respondidas = False
-
-st.divider()
+    st.markdown("---")
 
 # ============================================================
 # SECCIÓN DE EVALUADORES (3 a 5)
@@ -143,10 +104,10 @@ for i in range(NUM_EVAL_SLOTS):
     st.markdown(f"**Evaluador {i + 1}**{obligatorio}")
     col1, col2 = st.columns(2)
     with col1:
-        nombre_ev = st.text_input(f"Nombre", key=f"ev_nombre_{i}", label_visibility="hidden",
+        nombre_ev = st.text_input("Nombre", key=f"ev_nombre_{i}", label_visibility="hidden",
                                    placeholder=f"Nombre evaluador {i + 1}")
     with col2:
-        email_ev = st.text_input(f"Email", key=f"ev_email_{i}", label_visibility="hidden",
+        email_ev = st.text_input("Email", key=f"ev_email_{i}", label_visibility="hidden",
                                   placeholder=f"Email evaluador {i + 1}")
     if nombre_ev.strip() and email_ev.strip():
         evaluadores_data.append({"nombre": nombre_ev.strip(), "email": email_ev.strip()})
