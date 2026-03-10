@@ -320,18 +320,6 @@ def pagina_grupos():
     if "grupo_detalle" not in st.session_state:
         st.session_state["grupo_detalle"] = None
 
-    if st.session_state["grupo_detalle"]:
-        col_title, col_back = st.columns([5, 1])
-        with col_title:
-            st.header("Ingreso Participantes")
-        with col_back:
-            st.markdown("")
-            if st.button("← Volver", use_container_width=True):
-                st.session_state["grupo_detalle"] = None
-                st.rerun()
-        _detalle_grupo(st.session_state["grupo_detalle"])
-        return
-
     st.header("Ingreso Participantes")
 
     tab_lista, tab_nuevo = st.tabs(["Grupos existentes", "Crear nuevo"])
@@ -521,6 +509,15 @@ def pagina_grupos():
                     queries.eliminar_grupo(grupos[idx]["id"])
                 st.success(f"✅ {len(a_sel)} grupo(s) eliminado(s).")
                 st.rerun()
+
+        if st.session_state["grupo_detalle"]:
+            st.divider()
+            col_det, col_cerrar = st.columns([5, 1])
+            with col_cerrar:
+                if st.button("Cerrar", use_container_width=True):
+                    st.session_state["grupo_detalle"] = None
+                    st.rerun()
+            _detalle_grupo(st.session_state["grupo_detalle"])
 
 
 
