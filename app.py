@@ -2615,14 +2615,132 @@ def _tab_ingreso_feedback():
                 st.error(f"Error al guardar: {e}")
 
 
+def _tab_ingreso_evaluadores():
+    import pandas as pd
+    grupo_sel, part_sel = _cascada_ingresos("iev")
+    if not grupo_sel or not part_sel:
+        return
+
+    st.divider()
+
+    evs = queries.listar_evaluadores(part_sel["id"])
+    enrolled_emails = {e["email"].strip().lower() for e in evs}
+
+    # ---- Tabla editable de evaluadores actuales ----
+    rows = []
+    for i, ev in enumerate(evs, 1):
+        rows.append({
+            "✓": False,
+            "#": i,
+            "Nombre": ev.get("nombre") or "—",
+            "Email": ev.get("email") or "—",
+            "_id": ev["id"],
+        })
+
+    st.markdown(f"**Evaluadores de {part_sel['nombre']}** ({len(evs)})")
+
+    if rows:
+        df_ev = pd.DataFrame(rows)
+        edited_ev = st.data_editor(
+            df_ev.drop(columns=["_id"]),
+            column_config={
+                "✓": st.column_config.CheckboxColumn("✓", default=False, width="small"),
+                "#": st.column_config.NumberColumn("#", disabled=True, width="small"),
+                "Nombre": st.column_config.TextColumn("Nombre"),
+                "Email": st.column_config.TextColumn("Email"),
+            },
+            disabled=["#"],
+            hide_index=True,
+            use_container_width=True,
+            key=f"ev_editor_{part_sel['id']}",
+        )
+
+        sel_idx = edited_ev.index[edited_ev["✓"] == True].tolist()
+        col_grabar, col_eliminar, _ = st.columns([1, 1, 4])
+
+        with col_grabar:
+            if st.button("Grabar", use_container_width=True, type="primary", key=f"ev_grabar_{part_sel['id']}"):
+                cambios = 0
+                for i, row in edited_ev.iterrows():
+                    orig = rows[i]
+                    nuevo_nombre = row["Nombre"].strip()
+                    nuevo_email  = row["Email"].strip()
+                    if nuevo_nombre != orig["Nombre"] or nuevo_email != orig["Email"]:
+                        queries.actualizar_evaluador(orig["_id"], {
+                            "nombre": nuevo_nombre,
+                            "email":  nuevo_email,
+                        })
+                        cambios += 1
+                if cambios:
+                    st.success(f"✅ {cambios} evaluador(es) actualizado(s).")
+                    st.rerun()
+                else:
+                    st.info("Sin cambios para grabar.")
+
+        with col_eliminar:
+            if st.button(
+                f"Eliminar ({len(sel_idx)})" if sel_idx else "Eliminar",
+                use_container_width=True,
+                disabled=(len(sel_idx) == 0),
+                key=f"ev_eliminar_{part_sel['id']}",
+            ):
+                for i in sel_idx:
+                    queries.eliminar_evaluador(rows[i]["_id"])
+                st.success(f"✅ {len(sel_idx)} evaluador(es) eliminado(s).")
+                st.rerun()
+    else:
+        st.info("Sin evaluadores registrados.")
+
+    # ---- Agregar desde Personas ----
+    st.divider()
+    st.markdown("**Agregar evaluador desde Personas:**")
+    rut_empresa = grupo_sel.get("rut_empresa")
+    personas_disp = [
+        p for p in queries.listar_personas_sist(rut_empresa=rut_empresa)
+        if (p.get("pers_correo") or "").strip().lower() not in enrolled_emails
+    ]
+    if not personas_disp:
+        personas_disp = [
+            p for p in queries.listar_personas_sist()
+            if (p.get("pers_correo") or "").strip().lower() not in enrolled_emails
+        ]
+
+    ca1, ca2 = st.columns([4, 1])
+    persona_nueva = ca1.selectbox(
+        "Persona",
+        options=[None] + sorted(personas_disp, key=lambda p: (p.get("pers_apellidos") or "").lower()),
+        format_func=lambda p: (
+            f"{p['pers_apellidos']}, {p['pers_nombres']} — {p.get('pers_correo') or 'sin correo'}"
+            if p else "— Selecciona persona —"
+        ),
+        key=f"ev_nueva_{part_sel['id']}",
+    )
+    with ca2:
+        st.markdown("")
+        if st.button("Agregar", use_container_width=True,
+                     disabled=(persona_nueva is None),
+                     key=f"ev_btn_agregar_{part_sel['id']}"):
+            nombre = f"{persona_nueva['pers_nombres']} {persona_nueva['pers_apellidos']}".strip()
+            queries.crear_evaluador(
+                part_sel["id"], nombre,
+                persona_nueva.get("pers_correo") or "",
+                persona_nueva["pers_rut"],
+            )
+            st.success(f"✅ {nombre} agregado como evaluador.")
+            st.rerun()
+
+
 def pagina_ingresos_especiales():
     st.header("Ingresos Especiales")
 
-    tab_auto, tab_fb = st.tabs([
+    tab_ev, tab_auto, tab_fb = st.tabs([
+        "Ingreso Evaluadores",
         "Ingreso Respuesta Autoevaluación",
         "Ingreso Respuestas Feedback",
     ])
 
+    with tab_ev:
+        _tab_ingreso_evaluadores()
     with tab_auto:
         _tab_ingreso_auto()
     with tab_fb:
