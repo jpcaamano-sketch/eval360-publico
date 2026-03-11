@@ -1657,12 +1657,18 @@ def pagina_informe_final():
     hc[2].markdown("**Feedback**")
     hc[3].markdown("**Diferencia**")
     st.markdown("---")
+    def _fmt_val(col, v):
+        if v < 0:
+            col.markdown(f"**:red[{v:.1f}]**")
+        else:
+            col.caption(f"{v:.1f}")
+
     for cat in resultados_cat:
         rc = st.columns([3, 1.5, 1.5, 1.5])
         rc[0].caption(cat["categoria"])
-        rc[1].caption(f"{cat['auto']:.1f}")
-        rc[2].caption(f"{cat['feedback']:.1f}")
-        rc[3].caption(f"{cat['diferencia']:.1f}")
+        _fmt_val(rc[1], cat["auto"])
+        _fmt_val(rc[2], cat["feedback"])
+        _fmt_val(rc[3], cat["diferencia"])
 
     st.markdown("")
     st.markdown(secciones.get("ANALISIS_CATEGORIAS", ""))
@@ -1690,11 +1696,11 @@ def pagina_informe_final():
         for comp in comps_cat:
             rc2 = st.columns([3, 1.2, 1.2, 1.2, 1.5])
             rc2[0].caption(comp["texto_feedback"])
-            rc2[1].caption(f"{comp['auto']:.1f}")
-            rc2[2].caption(f"{comp['feedback']:.1f}")
-            rc2[3].caption(f"{comp['diferencia']:.1f}")
+            _fmt_val(rc2[1], comp["auto"])
+            _fmt_val(rc2[2], comp["feedback"])
+            _fmt_val(rc2[3], comp["diferencia"])
             if comp["recomendacion"] == "Mejorar":
-                rc2[4].markdown(f":red[**{comp['recomendacion']}**]")
+                rc2[4].markdown(f"**:red[{comp['recomendacion']}]**")
             else:
                 rc2[4].caption(comp["recomendacion"])
 
