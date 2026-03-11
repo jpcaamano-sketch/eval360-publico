@@ -1352,9 +1352,9 @@ def _generar_word_informe(nombre, resultados_cat, resultados_comp, secciones, pr
     for cat in resultados_cat:
         row = table.add_row()
         row.cells[0].text = cat["categoria"]
-        row.cells[1].text = str(cat["auto"])
-        row.cells[2].text = str(cat["feedback"])
-        row.cells[3].text = str(cat["diferencia"])
+        row.cells[1].text = f"{cat['auto']:.1f}"
+        row.cells[2].text = f"{cat['feedback']:.1f}"
+        row.cells[3].text = f"{cat['diferencia']:.1f}"
         for cell in row.cells:
             for p in cell.paragraphs:
                 for run in p.runs:
@@ -1388,9 +1388,9 @@ def _generar_word_informe(nombre, resultados_cat, resultados_comp, secciones, pr
         for comp in comps_cat:
             row = table.add_row()
             row.cells[0].text = comp["texto_feedback"]
-            row.cells[1].text = str(comp["auto"])
-            row.cells[2].text = str(comp["feedback"])
-            row.cells[3].text = str(comp["diferencia"])
+            row.cells[1].text = f"{comp['auto']:.1f}"
+            row.cells[2].text = f"{comp['feedback']:.1f}"
+            row.cells[3].text = f"{comp['diferencia']:.1f}"
             row.cells[4].text = comp["recomendacion"]
             for cell in row.cells:
                 for p in cell.paragraphs:
@@ -1749,9 +1749,9 @@ def pagina_informe_final():
             cell.fill = h_fill
         for idx, cat in enumerate(resultados_cat, 2):
             ws1.cell(row=idx, column=1, value=cat["categoria"])
-            ws1.cell(row=idx, column=2, value=cat["auto"])
-            ws1.cell(row=idx, column=3, value=cat["feedback"])
-            ws1.cell(row=idx, column=4, value=cat["diferencia"])
+            for col_i, key in [(2, "auto"), (3, "feedback"), (4, "diferencia")]:
+                c = ws1.cell(row=idx, column=col_i, value=cat[key])
+                c.number_format = "0.0"
         for col in ws1.columns:
             max_len = max(len(str(c.value or "")) for c in col)
             ws1.column_dimensions[col[0].column_letter].width = max(max_len + 2, 14)
@@ -1769,12 +1769,15 @@ def pagina_informe_final():
             col = 1
             ws2.cell(row=idx, column=col, value=comp["categoria"]); col += 1
             ws2.cell(row=idx, column=col, value=comp["texto_feedback"]); col += 1
-            ws2.cell(row=idx, column=col, value=comp["auto"]); col += 1
+            c = ws2.cell(row=idx, column=col, value=comp["auto"]); c.number_format = "0.0"; col += 1
             for ev_id in ev_ids:
                 nota = comp.get("notas_por_evaluador", {}).get(ev_id, "")
-                ws2.cell(row=idx, column=col, value=nota); col += 1
-            ws2.cell(row=idx, column=col, value=comp["feedback"]); col += 1
-            ws2.cell(row=idx, column=col, value=comp["diferencia"]); col += 1
+                c2 = ws2.cell(row=idx, column=col, value=nota)
+                if nota != "":
+                    c2.number_format = "0.0"
+                col += 1
+            c = ws2.cell(row=idx, column=col, value=comp["feedback"]); c.number_format = "0.0"; col += 1
+            c = ws2.cell(row=idx, column=col, value=comp["diferencia"]); c.number_format = "0.0"; col += 1
             ws2.cell(row=idx, column=col, value=comp["recomendacion"]); col += 1
         for col in ws2.columns:
             max_len = max(len(str(c.value or "")) for c in col)
