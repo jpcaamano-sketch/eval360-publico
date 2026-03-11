@@ -1,26 +1,30 @@
-"""Configuración Evaluación 360 — formulario público."""
+"""Configuración central de Evaluación 360 v2."""
 
-import streamlit as st
+import os
 
-def _s(key, default=""):
-    try:
-        return st.secrets[key]
-    except Exception:
-        return default
+def _cfg(key, default=""):
+    """Lee desde variables de entorno (Streamlit Secrets las inyecta como env vars),
+    o cae al valor por defecto para desarrollo local."""
+    return os.environ.get(key, default)
 
-SUPABASE_URL = "https://efomzdzxkwfmzbturvat.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVmb216ZHp4a3dmbXpidHVydmF0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg3NDg1NDIsImV4cCI6MjA4NDMyNDU0Mn0.j0XDhxsBhZpcQ4sGjKLPvbmcMKHxalzfAp7qOdywYQQ"
 
-SMTP_SERVER   = "smtp.gmail.com"
-SMTP_PORT     = 587
-SMTP_USER     = _s("SMTP_USER", "jpcaamano@gmail.com")
-SMTP_PASSWORD = _s("SMTP_PASSWORD", "")
+SUPABASE_URL = _cfg("SUPABASE_URL", "https://efomzdzxkwfmzbturvat.supabase.co")
+SUPABASE_KEY = _cfg("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVmb216ZHp4a3dmbXpidHVydmF0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg3NDg1NDIsImV4cCI6MjA4NDMyNDU0Mn0.j0XDhxsBhZpcQ4sGjKLPvbmcMKHxalzfAp7qOdywYQQ")
 
-GOOGLE_API_KEY = _s("GOOGLE_API_KEY", "")
+SMTP_SERVER = "smtp.gmail.com"
+SMTP_PORT   = 587
+SMTP_USER   = _cfg("SMTP_USER",   "jpcaamano@gmail.com")
+SMTP_PASSWORD = _cfg("SMTP_PASSWORD", "fgwd snko oebq vafx")
 
-APP_AUTO_URL     = _s("APP_AUTO_URL", "https://eval360-autoevaluacion.streamlit.app")
-APP_FEEDBACK_URL = _s("APP_FEEDBACK_URL", "https://eval360-feedback.streamlit.app")
+ADMIN_PASSWORD = _cfg("ADMIN_PASSWORD", "admin360")
 
+GOOGLE_API_KEY = _cfg("GOOGLE_API_KEY", "AIzaSyABmx45I5Xxb2LJV0I9rrxvrxH9nUAIY2s")
+
+# URLs de las aplicaciones (Streamlit Cloud — URL permanente)
+APP_AUTO_URL      = "https://eval360-yocreo.streamlit.app"
+APP_FEEDBACK_URL  = "https://eval360-yocreo.streamlit.app"
+
+# Escala de evaluación
 ESCALA = {
     1: "Nunca",
     2: "Rara vez",
@@ -28,3 +32,8 @@ ESCALA = {
     4: "Frecuentemente",
     5: "Siempre",
 }
+
+# Constantes de negocio
+MIN_EVALUADORES  = 3
+MAX_EVALUADORES  = 5
+UMBRAL_MEJORAR   = 3.5
