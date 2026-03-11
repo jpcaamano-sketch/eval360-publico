@@ -1323,13 +1323,19 @@ def _parsear_practicas(texto_practicas):
 
 
 def _render_tabla_informe(df, num_cols):
-    """Renderiza tabla como HTML con columnas numéricas centradas, rojas y en negrita."""
+    """Renderiza tabla como HTML con columnas numéricas centradas y coloreadas por signo."""
     import pandas as pd
 
     def fmt(x):
         if x is None or (isinstance(x, float) and pd.isna(x)):
             return "—"
-        return f"<b style='color:#cc0000'>{x:.1f}</b>"
+        if x < 0:
+            color = "#cc0000"
+        elif x > 0:
+            color = "#1a4a7a"
+        else:
+            color = "inherit"
+        return f"<span style='color:{color}'>{x:.1f}</span>"
 
     fmt_dict = {c: fmt for c in num_cols if c in df.columns}
 
