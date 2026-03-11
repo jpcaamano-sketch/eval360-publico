@@ -2873,9 +2873,21 @@ def pagina_mantenedores():
                 if not seleccionados:
                     st.warning("Marca al menos una persona para eliminar.")
                 else:
+                    eliminados, con_error = [], []
                     for rut in seleccionados:
-                        queries.eliminar_persona_sist(rut)
-                    st.success(f"{len(seleccionados)} persona(s) eliminada(s).")
+                        try:
+                            queries.eliminar_persona_sist(rut)
+                            eliminados.append(rut)
+                        except Exception:
+                            con_error.append(rut)
+                    if eliminados:
+                        st.success(f"{len(eliminados)} persona(s) eliminada(s).")
+                    if con_error:
+                        st.error(
+                            f"{len(con_error)} persona(s) no se pudieron eliminar porque tienen "
+                            "registros vinculados (participantes, evaluaciones, etc.): "
+                            + ", ".join(con_error)
+                        )
                     st.rerun()
 
         st.divider()
