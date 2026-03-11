@@ -1330,7 +1330,7 @@ def _render_tabla_informe(df, num_cols):
         if x is None or (isinstance(x, float) and pd.isna(x)):
             return "—"
         if x < 0:
-            color = "#cc0000"
+            return f"<b style='color:#cc0000'>{x:.1f}</b>"
         elif x > 0:
             color = "#1a4a7a"
         else:
