@@ -4,7 +4,6 @@ Puerto: 8507
 Acceso público con token.
 """
 
-import random
 import streamlit as st
 from core.config import ESCALA
 from core.styles import AUTO_CSS
