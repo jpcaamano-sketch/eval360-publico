@@ -1478,48 +1478,9 @@ def pagina_informe_final():
     if not part_sel:
         return
 
-    # ── Autoevaluación ────────────────────────────────────────
+    # ── Datos base ────────────────────────────────────────────
     grupo_info = queries.obtener_grupo(grupo_sel["id"])
     plantilla_id = grupo_info["plantilla_id"] if grupo_info else None
-
-    todas_respuestas = queries.obtener_respuestas_participante(part_sel["id"]) or []
-    respuestas_auto = [r for r in todas_respuestas if r.get("es_autoevaluacion")]
-
-    st.divider()
-    st.subheader("Autoevaluación")
-
-    if not plantilla_id:
-        st.warning("No se encontró la plantilla del grupo.")
-    elif not respuestas_auto:
-        st.warning(
-            "⚠️ La autoevaluación está marcada como completada pero no hay respuestas guardadas en la base de datos. "
-            "Ve a **Ingresos Especiales → Ingreso Respuesta Autoevaluación** para ingresar las respuestas manualmente."
-        )
-    else:
-        import pandas as pd
-        resp_map = {r["competencia_id"]: r["puntaje"] for r in respuestas_auto}
-        # Orden global por campo orden (igual que el Excel de referencia: intercalado entre categorías)
-        competencias_flat = sorted(
-            queries.listar_competencias_por_plantilla(plantilla_id),
-            key=lambda c: c.get("orden", 0),
-        )
-        filas = []
-        for n, comp in enumerate(competencias_flat, 1):
-            filas.append({
-                "#": n,
-                "Ámbito": comp.get("categoria_nombre", ""),
-                "Competencia": comp.get("texto_auto") or comp.get("nombre", ""),
-                "Nota": resp_map.get(comp["id"]),
-            })
-        st.dataframe(
-            pd.DataFrame(filas),
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "#": st.column_config.NumberColumn("#", width="small"),
-                "Nota": st.column_config.NumberColumn("Nota", width="small", format="%.1f"),
-            },
-        )
 
     st.divider()
 
@@ -1532,7 +1493,6 @@ def pagina_informe_final():
 
     st.caption(f"Evaluadores completados: {len(completados)}/{len(evaluadores)}")
 
-    # Tabla notas por evaluador
     if completados and plantilla_id:
         import pandas as pd
         todas_resp = queries.obtener_respuestas_participante(part_sel["id"]) or []
@@ -1549,7 +1509,6 @@ def pagina_informe_final():
                 "Competencia": comp.get("texto_feedback") or comp.get("nombre", ""),
                 "Auto": auto_val,
             }
-            prom_col_pos = len(fila)  # posición donde irá el promedio
             for ev_id, ev_nom in zip(ev_ids_t, ev_nombres_t):
                 resp = next((r for r in todas_resp if r["competencia_id"] == comp["id"] and r.get("evaluador_id") == ev_id), None)
                 nota = resp["puntaje"] if resp else None
@@ -1558,20 +1517,11 @@ def pagina_informe_final():
                     notas_fb.append(nota)
             prom_fb = round(sum(notas_fb) / len(notas_fb), 1) if notas_fb else None
             diff = round(prom_fb - auto_val, 1) if (prom_fb is not None and auto_val is not None) else None
-            # Insertar Promedio Feedback y Diferencia al final
             fila["Prom. Feedback"] = prom_fb
             fila["Diferencia"] = diff
             filas_ev.append(fila)
 
-        # Reordenar columnas: Ámbito, Competencia, Auto, Prom. Feedback, evaluadores..., Diferencia
-        cols_order = ["Competencia", "Auto", "Prom. Feedback"] + ev_nombres_t + ["Diferencia"]
-        df_ev = pd.DataFrame(filas_ev)[cols_order]
-        st.subheader("Notas por Evaluador")
-        num_cols_ev = ["Auto", "Prom. Feedback", "Diferencia"] + ev_nombres_t
-        col_cfg_ev = {c: st.column_config.NumberColumn(c, format="%.1f") for c in num_cols_ev}
-        st.dataframe(df_ev, use_container_width=True, hide_index=True, column_config=col_cfg_ev)
-
-        # Tabla resumen por ámbito
+        # Tabla resumen por ámbito (primero)
         ambitos = {}
         for fila in filas_ev:
             amb = fila["Ámbito"]
@@ -1590,19 +1540,26 @@ def pagina_informe_final():
             auto_amb = round(sum(vals["auto"]) / len(vals["auto"]), 1) if vals["auto"] else None
             prom_amb = round(sum(vals["prom_fb"]) / len(vals["prom_fb"]), 1) if vals["prom_fb"] else None
             diff_amb = round(prom_amb - auto_amb, 1) if (prom_amb is not None and auto_amb is not None) else None
-            fila_amb = {"Ámbito": amb, "Auto": auto_amb, "Prom. Feedback": prom_amb}
+            fila_amb = {"Ámbito": amb, "Auto": auto_amb, "Prom. Feedback": prom_amb, "Diferencia": diff_amb}
             for ev_nom in ev_nombres_t:
                 ev_vals = vals["ev"][ev_nom]
                 fila_amb[ev_nom] = round(sum(ev_vals) / len(ev_vals), 1) if ev_vals else None
-            fila_amb["Diferencia"] = diff_amb
             filas_amb.append(fila_amb)
 
-        cols_amb = ["Ámbito", "Auto", "Prom. Feedback"] + ev_nombres_t + ["Diferencia"]
+        cols_amb = ["Ámbito", "Auto", "Prom. Feedback", "Diferencia"] + ev_nombres_t
         df_amb = pd.DataFrame(filas_amb)[cols_amb]
         num_cols_amb = ["Auto", "Prom. Feedback", "Diferencia"] + ev_nombres_t
         col_cfg_amb = {c: st.column_config.NumberColumn(c, format="%.1f") for c in num_cols_amb}
         st.subheader("Resumen por Ámbito")
         st.dataframe(df_amb, use_container_width=True, hide_index=True, column_config=col_cfg_amb)
+
+        # Tabla notas por evaluador (después)
+        cols_order = ["Competencia", "Auto", "Prom. Feedback", "Diferencia"] + ev_nombres_t
+        df_ev = pd.DataFrame(filas_ev)[cols_order]
+        st.subheader("Notas por Evaluador")
+        num_cols_ev = ["Auto", "Prom. Feedback", "Diferencia"] + ev_nombres_t
+        col_cfg_ev = {c: st.column_config.NumberColumn(c, format="%.1f") for c in num_cols_ev}
+        st.dataframe(df_ev, use_container_width=True, hide_index=True, column_config=col_cfg_ev)
         st.divider()
 
     if not plantilla_id:
