@@ -1564,7 +1564,7 @@ def pagina_informe_final():
             filas_ev.append(fila)
 
         # Reordenar columnas: Ámbito, Competencia, Auto, Prom. Feedback, evaluadores..., Diferencia
-        cols_order = ["Ámbito", "Competencia", "Auto", "Prom. Feedback"] + ev_nombres_t + ["Diferencia"]
+        cols_order = ["Competencia", "Auto", "Prom. Feedback"] + ev_nombres_t + ["Diferencia"]
         df_ev = pd.DataFrame(filas_ev)[cols_order]
         st.subheader("Notas por Evaluador")
         num_cols_ev = ["Auto", "Prom. Feedback", "Diferencia"] + ev_nombres_t
