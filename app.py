@@ -1578,6 +1578,11 @@ def pagina_informe_final():
     if not part_sel:
         return
 
+    # Limpiar informe anterior si cambió el participante
+    if st.session_state.get("_inf_part_anterior") != part_sel["id"]:
+        st.session_state.pop("informe_360", None)
+        st.session_state["_inf_part_anterior"] = part_sel["id"]
+
     # ── Datos base ────────────────────────────────────────────
     grupo_info = queries.obtener_grupo(grupo_sel["id"])
     plantilla_id = grupo_info["plantilla_id"] if grupo_info else None
