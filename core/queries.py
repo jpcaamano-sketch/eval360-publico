@@ -252,6 +252,13 @@ def actualizar_persona_sist(pers_rut, datos):
     return sb.table("sist_personas").update(datos).eq("pers_rut", pers_rut).execute()
 
 
+@con_reintento
+def eliminar_persona_sist(pers_rut):
+    """Elimina una persona de sist_personas."""
+    sb = get_client()
+    return sb.table("sist_personas").delete().eq("pers_rut", pers_rut).execute()
+
+
 # ============================================================
 # GRUPOS
 # ============================================================
