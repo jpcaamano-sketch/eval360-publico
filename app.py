@@ -2806,33 +2806,68 @@ def pagina_mantenedores():
     # TAB PERSONAS (sist_personas)
     # ----------------------------------------------------------
     with tab_personas:
-        st.markdown("Personas registradas en el sistema compartido de Asistencias.")
-
         empresas_otec = queries.listar_empresas_otec()
-        empresa_map = {e["rut_empresa"]: e["nombre_empresa"] for e in empresas_otec}
+        empresa_map   = {e["rut_empresa"]: e["nombre_empresa"] for e in empresas_otec}
+        emp_inv_map   = {e["nombre_empresa"]: e["rut_empresa"] for e in empresas_otec}
+        emp_nombres   = ["— Sin empresa —"] + [e["nombre_empresa"] for e in empresas_otec]
 
-        personas = queries.listar_personas_sist(solo_con_correo=False)  # todas, incluye sin correo
+        personas = queries.listar_personas_sist(solo_con_correo=False)
 
-        if personas:
+        if not personas:
+            st.info("No hay personas registradas aún.")
+        else:
             rows_p = []
+            rut_list = []
             for p in personas:
                 rows_p.append({
                     "RUT": p.get("pers_rut", ""),
-                    "Nombres": p.get("pers_nombres", ""),
-                    "Apellidos": p.get("pers_apellidos", ""),
-                    "Correo": p.get("pers_correo") or "⚠ sin correo",
-                    "Empresa": empresa_map.get(p.get("rut_empresa") or "", p.get("rut_empresa") or "—"),
+                    "Nombres": p.get("pers_nombres", "") or "",
+                    "Apellidos": p.get("pers_apellidos", "") or "",
+                    "Correo": p.get("pers_correo") or "",
+                    "Empresa": empresa_map.get(p.get("rut_empresa") or "", "— Sin empresa —"),
                 })
+                rut_list.append(p.get("pers_rut", ""))
+
             df_p = pd.DataFrame(rows_p)
-            st.dataframe(df_p, use_container_width=True, hide_index=True)
+            edited_p = st.data_editor(
+                df_p,
+                use_container_width=True,
+                hide_index=True,
+                key="editor_personas",
+                column_config={
+                    "RUT": st.column_config.TextColumn("RUT", disabled=True),
+                    "Nombres": st.column_config.TextColumn("Nombres"),
+                    "Apellidos": st.column_config.TextColumn("Apellidos"),
+                    "Correo": st.column_config.TextColumn("Correo"),
+                    "Empresa": st.column_config.SelectboxColumn("Empresa", options=emp_nombres),
+                },
+            )
             st.caption(f"{len(personas)} persona(s) registrada(s).")
-        else:
-            st.info("No hay personas registradas aún.")
+
+            if st.button("Guardar cambios personas", type="primary", key="btn_save_personas"):
+                errores = 0
+                for i, row in edited_p.iterrows():
+                    rut = rut_list[i]
+                    emp_nombre = row["Empresa"]
+                    rut_emp = emp_inv_map.get(emp_nombre) if emp_nombre != "— Sin empresa —" else None
+                    try:
+                        queries.actualizar_persona_sist(rut, {
+                            "pers_nombres": row["Nombres"],
+                            "pers_apellidos": row["Apellidos"],
+                            "pers_correo": row["Correo"],
+                            "rut_empresa": rut_emp,
+                        })
+                    except Exception:
+                        errores += 1
+                if errores:
+                    st.error(f"Error al guardar {errores} registro(s).")
+                else:
+                    st.success("Cambios guardados correctamente.")
+                    st.rerun()
 
         st.divider()
 
-        # Formulario crear / editar persona
-        with st.expander("➕ Crear o editar persona"):
+        with st.expander("➕ Crear nueva persona"):
             with st.form("form_persona"):
                 col1, col2 = st.columns(2)
                 with col1:
@@ -2857,24 +2892,44 @@ def pagina_mantenedores():
                             p_rut.strip(), p_nombres.strip(), p_apellidos.strip(),
                             p_correo.strip(), rut_emp,
                         )
-                        st.success(f"✅ Persona {p_nombres.strip()} {p_apellidos.strip()} guardada.")
+                        st.success(f"Persona {p_nombres.strip()} {p_apellidos.strip()} guardada.")
                         st.rerun()
 
     # ----------------------------------------------------------
-    # TAB EMPRESAS (otec_empresas — solo lectura)
+    # TAB EMPRESAS
     # ----------------------------------------------------------
     with tab_empresas:
-        st.markdown("Empresas registradas en el sistema OTEC (solo lectura desde esta app).")
         empresas = queries.listar_empresas_otec()
-        if empresas:
-            df_e = pd.DataFrame([
-                {"RUT Empresa": e["rut_empresa"], "Nombre Empresa": e["nombre_empresa"]}
-                for e in empresas
-            ])
-            st.dataframe(df_e, use_container_width=True, hide_index=True)
-            st.caption(f"{len(empresas)} empresa(s) registrada(s). Para crear o editar empresas, usa la app Gestión OTEC.")
-        else:
+        if not empresas:
             st.info("No hay empresas registradas.")
+        else:
+            rows_e = [{"RUT Empresa": e["rut_empresa"], "Nombre Empresa": e["nombre_empresa"]} for e in empresas]
+            rut_e_list = [e["rut_empresa"] for e in empresas]
+            df_e = pd.DataFrame(rows_e)
+            edited_e = st.data_editor(
+                df_e,
+                use_container_width=True,
+                hide_index=True,
+                key="editor_empresas",
+                column_config={
+                    "RUT Empresa": st.column_config.TextColumn("RUT Empresa", disabled=True),
+                    "Nombre Empresa": st.column_config.TextColumn("Nombre Empresa"),
+                },
+            )
+            st.caption(f"{len(empresas)} empresa(s) registrada(s).")
+
+            if st.button("Guardar cambios empresas", type="primary", key="btn_save_empresas"):
+                errores = 0
+                for i, row in edited_e.iterrows():
+                    try:
+                        queries.actualizar_empresa_otec(rut_e_list[i], {"nombre_empresa": row["Nombre Empresa"]})
+                    except Exception:
+                        errores += 1
+                if errores:
+                    st.error(f"Error al guardar {errores} registro(s).")
+                else:
+                    st.success("Cambios guardados correctamente.")
+                    st.rerun()
 
 
 # ============================================================
