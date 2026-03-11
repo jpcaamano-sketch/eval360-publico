@@ -1639,7 +1639,7 @@ def pagina_informe_final():
 
         # Tabla notas por evaluador (después) — ordenada por categoría y luego por competencia
         filas_ev_sorted = sorted(filas_ev, key=lambda f: (f["_cat_orden"], f["_comp_orden"]))
-        cols_order = ["Competencia", "Auto", "Prom. Feedback", "Diferencia"] + ev_nombres_t
+        cols_order = ["Ámbito", "Competencia", "Auto", "Prom. Feedback", "Diferencia"] + ev_nombres_t
         df_ev = pd.DataFrame(filas_ev_sorted)[cols_order]
         num_cols_ev = ["Auto", "Prom. Feedback", "Diferencia"] + ev_nombres_t
         st.subheader("Notas por Evaluador")
