@@ -18,7 +18,7 @@ SMTP_PASSWORD = _cfg("SMTP_PASSWORD", "fgwd snko oebq vafx")
 
 ADMIN_PASSWORD = _cfg("ADMIN_PASSWORD", "admin360")
 
-GOOGLE_API_KEY = _cfg("GOOGLE_API_KEY", "AIzaSyABmx45I5Xxb2LJV0I9rrxvrxH9nUAIY2s")
+GOOGLE_API_KEY = _cfg("GOOGLE_API_KEY", "AIzaSyBvCGMkdcgzaDgv9vPJ_MXT43c13UX0QQ0")
 
 # URLs de las aplicaciones (Streamlit Cloud — URL permanente)
 APP_AUTO_URL      = "https://eval360-yocreo.streamlit.app"
