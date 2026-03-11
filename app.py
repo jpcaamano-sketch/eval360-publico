@@ -770,6 +770,14 @@ def pagina_seguimiento_auto():
 
     st.divider()
 
+    total_auto = len(filas_filtradas)
+    term_auto  = sum(1 for p in filas_filtradas if p.get("autoevaluacion_completada"))
+    pend_auto  = total_auto - term_auto
+    ca, cb, cc = st.columns(3)
+    ca.metric("Total", total_auto)
+    cb.metric("Terminados", term_auto)
+    cc.metric("Pendientes", pend_auto)
+
     # Construir DataFrame con checkbox de recordatorio (sin columna Grupo)
     part_list = []
     rows = []
@@ -994,6 +1002,14 @@ def pagina_seguimiento_feedback():
     filas_filtradas = filas_por_empresa if grupo_filtro == "Todos" else [f for f in filas_por_empresa if f["grupo_nombre"] == grupo_filtro]
 
     st.divider()
+
+    total_fb = len(filas_filtradas)
+    term_fb  = sum(1 for f in filas_filtradas if f["evaluador"].get("completado"))
+    pend_fb  = total_fb - term_fb
+    fa, fb_, fc = st.columns(3)
+    fa.metric("Total", total_fb)
+    fb_.metric("Terminados", term_fb)
+    fc.metric("Pendientes", pend_fb)
 
     # Construir DataFrame con checkbox de recordatorio (sin columna Grupo)
     ev_list = []
