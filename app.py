@@ -1447,23 +1447,34 @@ def pagina_informe_final():
         st.info("No hay grupos creados.")
         return
 
-    grupo_sel = st.selectbox("Seleccionar grupo", options=grupos,
-                              format_func=lambda g: g["nombre"], key="inf_grupo")
+    col_emp, col_grp, col_part = st.columns(3)
+
+    empresas = sorted({g.get("empresa") or "—" for g in grupos})
+    empresa_sel = col_emp.selectbox("Empresa", options=empresas, key="inf_empresa")
+
+    grupos_filtrados = [g for g in grupos if (g.get("empresa") or "—") == empresa_sel]
+    grupo_sel = col_grp.selectbox("Seleccionar grupo", options=grupos_filtrados,
+                                   format_func=lambda g: g["nombre"], key="inf_grupo")
     if not grupo_sel:
         return
 
     participantes = queries.listar_participantes(grupo_sel["id"])
     participantes_completos = sorted(
         [p for p in participantes if p["autoevaluacion_completada"]],
-        key=lambda p: p["nombre"],
+        key=lambda p: (p.get("pers_apellidos") or p.get("nombre") or "").lower(),
     )
 
     if not participantes_completos:
+        col_part.markdown("&nbsp;")
         st.info("No hay participantes con autoevaluación completada en este grupo.")
         return
 
-    part_sel = st.selectbox("Seleccionar participante", options=participantes_completos,
-                             format_func=lambda p: p["nombre"], key="inf_part")
+    part_sel = col_part.selectbox(
+        "Seleccionar participante",
+        options=participantes_completos,
+        format_func=lambda p: p["nombre"],
+        key="inf_part",
+    )
     if not part_sel:
         return
 
@@ -1506,7 +1517,7 @@ def pagina_informe_final():
             hide_index=True,
             column_config={
                 "#": st.column_config.NumberColumn("#", width="small"),
-                "Nota": st.column_config.NumberColumn("Nota", width="small"),
+                "Nota": st.column_config.NumberColumn("Nota", width="small", format="%.1f"),
             },
         )
 
@@ -1556,7 +1567,9 @@ def pagina_informe_final():
         cols_order = ["Ámbito", "Competencia", "Auto", "Prom. Feedback"] + ev_nombres_t + ["Diferencia"]
         df_ev = pd.DataFrame(filas_ev)[cols_order]
         st.subheader("Notas por Evaluador")
-        st.dataframe(df_ev, use_container_width=True, hide_index=True)
+        num_cols_ev = ["Auto", "Prom. Feedback", "Diferencia"] + ev_nombres_t
+        col_cfg_ev = {c: st.column_config.NumberColumn(c, format="%.1f") for c in num_cols_ev}
+        st.dataframe(df_ev, use_container_width=True, hide_index=True, column_config=col_cfg_ev)
 
         # Tabla resumen por ámbito
         ambitos = {}
@@ -1586,8 +1599,10 @@ def pagina_informe_final():
 
         cols_amb = ["Ámbito", "Auto", "Prom. Feedback"] + ev_nombres_t + ["Diferencia"]
         df_amb = pd.DataFrame(filas_amb)[cols_amb]
+        num_cols_amb = ["Auto", "Prom. Feedback", "Diferencia"] + ev_nombres_t
+        col_cfg_amb = {c: st.column_config.NumberColumn(c, format="%.1f") for c in num_cols_amb}
         st.subheader("Resumen por Ámbito")
-        st.dataframe(df_amb, use_container_width=True, hide_index=True)
+        st.dataframe(df_amb, use_container_width=True, hide_index=True, column_config=col_cfg_amb)
         st.divider()
 
     if not plantilla_id:
