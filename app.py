@@ -1154,6 +1154,10 @@ def _calcular_puntajes_360(participante_id, plantilla_id):
     respuestas = queries.obtener_respuestas_participante(participante_id)
     competencias = queries.listar_competencias_por_plantilla(plantilla_id)
 
+    # Solo feedback de evaluadores que completaron
+    evaluadores = queries.listar_evaluadores(participante_id)
+    completados_ids = {e["id"] for e in evaluadores if e["completado"]}
+
     auto_scores = {}
     feedback_scores = {}
 
@@ -1162,9 +1166,11 @@ def _calcular_puntajes_360(participante_id, plantilla_id):
         if r["es_autoevaluacion"]:
             auto_scores[cid] = r["puntaje"]
         else:
-            if cid not in feedback_scores:
-                feedback_scores[cid] = []
-            feedback_scores[cid].append((r.get("evaluador_id"), r["puntaje"]))
+            ev_id = r.get("evaluador_id")
+            if ev_id in completados_ids:
+                if cid not in feedback_scores:
+                    feedback_scores[cid] = []
+                feedback_scores[cid].append((ev_id, r["puntaje"]))
 
     resultados_comp = []
     for comp in competencias:
@@ -1174,8 +1180,6 @@ def _calcular_puntajes_360(participante_id, plantilla_id):
         fb_list = [p for _, p in fb_list_raw]
         fb_avg = sum(fb_list) / len(fb_list) if fb_list else 0
         diff = round(fb_avg - auto, 1)
-        # Umbral 3.5: referencia = promedio feedback (percepción externa en 360°)
-        # Si no hay feedback aún, se usa la autoevaluación como referencia provisoria
         mejorar = (auto < 3.5) or (fb_avg > 0 and fb_avg < 3.5) or (fb_avg > 0 and fb_avg < auto)
         recomendacion = "Mejorar" if mejorar else "Mantener"
         resultados_comp.append({
