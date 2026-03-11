@@ -1539,8 +1539,8 @@ def pagina_informe_final():
         import pandas as pd
         todas_resp = queries.obtener_respuestas_participante(part_sel["id"]) or []
         competencias_pl = queries.listar_competencias_por_plantilla(plantilla_id)
-        ev_ids_t     = [e["id"]     for e in completados]
-        ev_nombres_t = [e["nombre"] for e in completados]
+        ev_ids_t     = [e["id"] for e in completados]
+        ev_nombres_t = [f"Eva-{i+1}" for i in range(len(completados))]
         filas_ev = []
         for comp in competencias_pl:
             resp_auto = next((r for r in todas_resp if r["competencia_id"] == comp["id"] and r.get("es_autoevaluacion")), None)
