@@ -1176,8 +1176,8 @@ def _calcular_puntajes_360(participante_id, plantilla_id):
         diff = round(fb_avg - auto, 1)
         # Umbral 3.5: referencia = promedio feedback (percepción externa en 360°)
         # Si no hay feedback aún, se usa la autoevaluación como referencia provisoria
-        score_ref = fb_avg if fb_avg > 0 else auto
-        recomendacion = "Mantener" if score_ref >= 3.5 else "Aprender"
+        mejorar = (auto < 3.5) or (fb_avg > 0 and fb_avg < 3.5) or (fb_avg > 0 and fb_avg < auto)
+        recomendacion = "Mejorar" if mejorar else "Mantener"
         resultados_comp.append({
             "competencia_id": cid,
             "categoria": comp["categoria_nombre"],
@@ -1244,7 +1244,7 @@ RESULTADOS POR COMPETENCIA:
 La escala es de 1 a 5 (1=Nunca, 2=Rara vez, 3=A veces, 4=Frecuentemente, 5=Siempre).
 El umbral de corte es 3.5: sobre ese valor la competencia está consolidada; bajo ese valor requiere desarrollo activo.
 "Diferencia" = Feedback - Autoevaluación. Si es positiva, el entorno evalúa mejor de lo que el evaluado se percibe. Si es negativa, existe una sobreestimación propia.
-"Mantener" = puntaje >= 3.5 (competencia consolidada, ocurre con frecuencia suficiente). "Aprender" = puntaje < 3.5 (área de desarrollo prioritaria, la conducta no ocurre con la frecuencia necesaria).
+"Mantener" = auto >= 3.5 Y feedback >= 3.5 Y feedback >= auto (competencia consolidada). "Mejorar" = auto < 3.5 O feedback < 3.5 O feedback < auto (área de desarrollo prioritaria).
 
 Genera EXACTAMENTE las siguientes secciones separadas por los marcadores indicados:
 
@@ -1255,7 +1255,7 @@ Escribe 2-3 párrafos con un resumen ejecutivo de los resultados: fortalezas pri
 Escribe un análisis de 1-2 párrafos sobre los resultados a nivel de categorías, destacando las mejor y peor evaluadas.
 
 ===PRACTICAS===
-Para CADA competencia con recomendación "Aprender", genera una práctica de aprendizaje con el siguiente formato exacto (una por competencia):
+Para CADA competencia con recomendación "Mejorar", genera una práctica de aprendizaje con el siguiente formato exacto (una por competencia):
 
 COMPETENCIA: [nombre exacto de la competencia]
 OBJETIVO: [objetivo claro y medible]
@@ -1438,12 +1438,12 @@ def _generar_word_informe(nombre, resultados_cat, resultados_comp, secciones, pr
                 for p in cell.paragraphs:
                     for run in p.runs:
                         run.font.size = Pt(9)
-            if comp["recomendacion"] == "Aprender":
+            if comp["recomendacion"] == "Mejorar":
                 run = row.cells[4].paragraphs[0].runs[0]
                 run.font.color.rgb = RGBColor(204, 0, 0)
 
         # Prácticas para esta categoría
-        comps_aprender = [c for c in comps_cat if c["recomendacion"] == "Aprender"]
+        comps_aprender = [c for c in comps_cat if c["recomendacion"] == "Mejorar"]
         if comps_aprender:
             doc.add_paragraph("")
             p_titulo = doc.add_paragraph()
@@ -1693,13 +1693,13 @@ def pagina_informe_final():
             rc2[1].caption(f"{comp['auto']:.1f}")
             rc2[2].caption(f"{comp['feedback']:.1f}")
             rc2[3].caption(f"{comp['diferencia']:.1f}")
-            if comp["recomendacion"] == "Aprender":
+            if comp["recomendacion"] == "Mejorar":
                 rc2[4].markdown(f":red[**{comp['recomendacion']}**]")
             else:
                 rc2[4].caption(comp["recomendacion"])
 
         # Prácticas
-        comps_aprender = [c for c in comps_cat if c["recomendacion"] == "Aprender"]
+        comps_aprender = [c for c in comps_cat if c["recomendacion"] == "Mejorar"]
         if comps_aprender:
             st.markdown("**Prácticas de aprendizaje:**")
             for comp in comps_aprender:
