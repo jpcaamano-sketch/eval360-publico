@@ -7,7 +7,7 @@ import io
 import streamlit as st
 import streamlit.components.v1 as components
 from datetime import datetime, timezone
-from core.config import ESCALA, GOOGLE_API_KEY
+from core.config import ESCALA, GOOGLE_API_KEY, ADMIN_PASSWORD, UMBRAL_MEJORAR, MIN_EVALUADORES, MAX_EVALUADORES
 from core.styles import ADMIN_CSS
 from core import queries
 from core.email_service import (
@@ -27,6 +27,23 @@ import google.generativeai as genai
 st.set_page_config(page_title="Evaluación 360° Admin", page_icon="📊", layout="wide")
 st.markdown(ADMIN_CSS, unsafe_allow_html=True)
 
+# ============================================================
+# AUTENTICACIÓN
+# ============================================================
+
+if "autenticado" not in st.session_state:
+    st.session_state["autenticado"] = False
+
+if not st.session_state["autenticado"]:
+    st.title("Evaluación 360° — Admin")
+    pwd = st.text_input("Contraseña", type="password", key="login_pwd")
+    if st.button("Ingresar", type="primary"):
+        if pwd == ADMIN_PASSWORD:
+            st.session_state["autenticado"] = True
+            st.rerun()
+        else:
+            st.error("Contraseña incorrecta.")
+    st.stop()
 
 # ============================================================
 # SIDEBAR
@@ -1217,7 +1234,7 @@ def _calcular_puntajes_360(participante_id, plantilla_id):
         fb_list = [p for _, p in fb_list_raw]
         fb_avg = sum(fb_list) / len(fb_list) if fb_list else 0
         diff = round(fb_avg - auto, 1)
-        mejorar = (auto < 3.5) or (fb_avg > 0 and fb_avg < 3.5) or (fb_avg > 0 and fb_avg < auto)
+        mejorar = (auto < UMBRAL_MEJORAR) or (fb_avg > 0 and fb_avg < UMBRAL_MEJORAR) or (fb_avg > 0 and fb_avg < auto)
         recomendacion = "Mejorar" if mejorar else "Mantener"
         resultados_comp.append({
             "competencia_id": cid,
@@ -1241,8 +1258,8 @@ def _calcular_puntajes_360(participante_id, plantilla_id):
 
     resultados_cat = []
     for cat, scores in cat_map.items():
-        auto_avg = sum(scores["auto"]) / len(scores["auto"])
-        fb_avg = sum(scores["feedback"]) / len(scores["feedback"])
+        auto_avg = sum(scores["auto"]) / len(scores["auto"]) if scores["auto"] else 0
+        fb_avg   = sum(scores["feedback"]) / len(scores["feedback"]) if scores["feedback"] else 0
         resultados_cat.append({
             "categoria": cat,
             "auto": round(auto_avg, 1),
@@ -2576,7 +2593,7 @@ def _tab_ingreso_auto():
 
     if st.button("💾 Guardar Autoevaluación", type="primary", use_container_width=True, key="btn_guardar_auto"):
         try:
-            scores = {competencias[i]["id"]: int(row["Nota"]) for i, row in edited.iterrows()}
+            scores = {competencias[i]["id"]: int(row["Nota"]) for i, row in edited.iterrows() if i < len(competencias)}
             if part_sel.get("autoevaluacion_completada"):
                 queries.eliminar_respuestas_auto(part_sel["id"])
             queries.guardar_respuestas_auto(part_sel["id"], scores)
@@ -2655,7 +2672,7 @@ def _tab_ingreso_feedback():
             st.warning("Nombres, apellidos y correo del evaluador son obligatorios.")
         else:
             try:
-                scores = {competencias[i]["id"]: int(row["Nota"]) for i, row in edited.iterrows()}
+                scores = {competencias[i]["id"]: int(row["Nota"]) for i, row in edited.iterrows() if i < len(competencias)}
                 evs_existentes = queries.listar_evaluadores(part_sel["id"])
                 ev_existente = next(
                     (e for e in evs_existentes if e["email"].strip().lower() == ev_email.strip().lower()),
