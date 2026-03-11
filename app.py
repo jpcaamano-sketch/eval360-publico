@@ -1500,11 +1500,13 @@ def pagina_informe_final():
         ev_ids_t     = [e["id"]     for e in completados]
         ev_nombres_t = [e["nombre"] for e in completados]
         filas_ev = []
-        for comp in sorted(competencias_pl, key=lambda c: c.get("orden", 0)):
+        for comp in competencias_pl:
             resp_auto = next((r for r in todas_resp if r["competencia_id"] == comp["id"] and r.get("es_autoevaluacion")), None)
             auto_val = resp_auto["puntaje"] if resp_auto else None
             notas_fb = []
             fila = {
+                "_cat_orden": comp.get("_cat_orden", 0),
+                "_comp_orden": comp.get("orden", 0),
                 "Ámbito": comp.get("categoria_nombre", ""),
                 "Competencia": comp.get("texto_feedback") or comp.get("nombre", ""),
                 "Auto": auto_val,
@@ -1553,9 +1555,8 @@ def pagina_informe_final():
         st.subheader("Resumen por Ámbito")
         st.dataframe(df_amb, use_container_width=True, hide_index=True, column_config=col_cfg_amb)
 
-        # Tabla notas por evaluador (después)
-        orden_ambitos = ["Comunicación", "Asertividad", "Resolución de conflictos", "Respeto", "Trabajo en equipo", "Empatía"]
-        filas_ev_sorted = sorted(filas_ev, key=lambda f: orden_ambitos.index(f["Ámbito"]) if f["Ámbito"] in orden_ambitos else 99)
+        # Tabla notas por evaluador (después) — ordenada por categoría y luego por competencia
+        filas_ev_sorted = sorted(filas_ev, key=lambda f: (f["_cat_orden"], f["_comp_orden"]))
         cols_order = ["Competencia", "Auto", "Prom. Feedback", "Diferencia"] + ev_nombres_t
         df_ev = pd.DataFrame(filas_ev_sorted)[cols_order]
         st.subheader("Notas por Evaluador")
