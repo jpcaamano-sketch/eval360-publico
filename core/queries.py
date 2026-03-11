@@ -154,7 +154,7 @@ def listar_competencias_por_plantilla(plantilla_id):
             comp["categoria_nombre"] = cat["nombre"]
             comp["_cat_orden"] = cat.get("orden", 0)
         resultado.extend(comps)
-    return sorted(resultado, key=lambda c: (c.get("orden", 0), c.get("_cat_orden", 0)))
+    return sorted(resultado, key=lambda c: (c.get("orden", 0), c.get("_cat_orden", 0), c.get("id", "")))
 
 
 @con_reintento
