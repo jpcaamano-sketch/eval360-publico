@@ -1554,8 +1554,10 @@ def pagina_informe_final():
         st.dataframe(df_amb, use_container_width=True, hide_index=True, column_config=col_cfg_amb)
 
         # Tabla notas por evaluador (después)
+        orden_ambitos = ["Comunicación", "Asertividad", "Resolución de conflictos", "Respeto", "Trabajo en equipo", "Empatía"]
+        filas_ev_sorted = sorted(filas_ev, key=lambda f: orden_ambitos.index(f["Ámbito"]) if f["Ámbito"] in orden_ambitos else 99)
         cols_order = ["Competencia", "Auto", "Prom. Feedback", "Diferencia"] + ev_nombres_t
-        df_ev = pd.DataFrame(filas_ev)[cols_order]
+        df_ev = pd.DataFrame(filas_ev_sorted)[cols_order]
         st.subheader("Notas por Evaluador")
         num_cols_ev = ["Auto", "Prom. Feedback", "Diferencia"] + ev_nombres_t
         col_cfg_ev = {c: st.column_config.NumberColumn(c, format="%.1f") for c in num_cols_ev}
