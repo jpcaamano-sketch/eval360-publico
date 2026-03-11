@@ -170,23 +170,28 @@ if st.button("Guardar Autoevaluación", use_container_width=True, type="primary"
         for err in errores:
             st.error(err)
     else:
+        # 1. Guardar respuestas y marcar completado (crítico — se hace primero)
         try:
             queries.guardar_respuestas_auto(participante["id"], respuestas)
-
-            for ev in evaluadores_data:
-                persona = queries.buscar_persona_por_correo(ev["email"])
-                pers_rut = persona["pers_rut"] if persona else None
-                queries.crear_evaluador(participante["id"], ev["nombre"], ev["email"], pers_rut)
 
             from datetime import datetime, timezone
             queries.actualizar_participante(participante["id"], {
                 "autoevaluacion_completada": True,
                 "autoevaluacion_fecha": datetime.now(timezone.utc).isoformat(),
             })
-
-            st.success("¡Tu autoevaluación ha sido guardada exitosamente! Gracias por participar.")
-            st.balloons()
-            st.rerun()
-
         except Exception as e:
-            st.error(f"Error al guardar: {e}")
+            st.error(f"Error al guardar la autoevaluación: {e}")
+            st.stop()
+
+        # 2. Crear evaluadores (independiente — un error aquí no revierte lo anterior)
+        for ev in evaluadores_data:
+            try:
+                persona = queries.buscar_persona_por_correo(ev["email"])
+                pers_rut = persona["pers_rut"] if persona else None
+                queries.crear_evaluador(participante["id"], ev["nombre"], ev["email"], pers_rut)
+            except Exception:
+                pass  # Si falla un evaluador, continúa con los demás
+
+        st.success("¡Tu autoevaluación ha sido guardada exitosamente! Gracias por participar.")
+        st.balloons()
+        st.rerun()
