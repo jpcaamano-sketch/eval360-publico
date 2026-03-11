@@ -197,6 +197,13 @@ def listar_empresas_otec():
 
 
 @con_reintento
+def actualizar_empresa_otec(rut_empresa, datos):
+    """Actualiza datos de una empresa en otec_empresas."""
+    sb = get_client()
+    return sb.table("otec_empresas").update(datos).eq("rut_empresa", rut_empresa).execute()
+
+
+@con_reintento
 def listar_personas_sist(rut_empresa=None, solo_con_correo=True):
     """Lista personas de sist_personas.
     Si rut_empresa se pasa, filtra por esa empresa.
