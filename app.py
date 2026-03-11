@@ -609,12 +609,33 @@ def _detalle_grupo(grupo_id):
                 for idx in range(len(rows_part))
                 if edited_part.iloc[idx]["✓"] and not rows_part[idx]["✓"]
             ]
-            if not nuevos_ruts:
-                st.info("No hay nuevos participantes seleccionados.")
+            eliminados_ruts = [
+                todas_personas_ord[idx]["pers_rut"]
+                for idx in range(len(rows_part))
+                if not edited_part.iloc[idx]["✓"] and rows_part[idx]["✓"]
+            ]
+            cambios = False
+            errores_elim = []
+            for rut in nuevos_ruts:
+                queries.crear_participante(grupo_id, rut)
+                cambios = True
+            for rut in eliminados_ruts:
+                part = part_by_rut.get(rut)
+                if part:
+                    try:
+                        queries.eliminar_participante(part["id"])
+                        cambios = True
+                    except Exception:
+                        errores_elim.append(part.get("nombre", rut))
+            if nuevos_ruts:
+                st.success(f"{len(nuevos_ruts)} participante(s) agregado(s).")
+            if eliminados_ruts and not errores_elim:
+                st.success(f"{len(eliminados_ruts)} participante(s) eliminado(s).")
+            if errores_elim:
+                st.error(f"No se pudo eliminar: {', '.join(errores_elim)} (tienen datos vinculados).")
+            if not cambios:
+                st.info("No hay cambios para guardar.")
             else:
-                for rut in nuevos_ruts:
-                    queries.crear_participante(grupo_id, rut)
-                st.success(f"✅ {len(nuevos_ruts)} participante(s) agregado(s).")
                 st.rerun()
 
     st.divider()
