@@ -4,7 +4,6 @@ Puerto: 8508
 Acceso público con token de evaluador.
 """
 
-import random
 import streamlit as st
 from datetime import datetime, timezone
 from core.config import ESCALA
@@ -137,17 +136,23 @@ if st.button("Guardar Feedback", use_container_width=True, type="primary"):
     if not todas_respondidas or len(respuestas) < len(competencias):
         st.error("Debes responder todas las competencias antes de enviar.")
     else:
+        # 1. Guardar respuestas (crítico)
         try:
             queries.guardar_respuestas_feedback(participante_id, evaluador["id"], respuestas)
+        except Exception as e:
+            st.error(f"Error al guardar las respuestas: {e}")
+            st.stop()
 
+        # 2. Marcar evaluador como completado (crítico, separado para garantizar ejecución)
+        try:
             queries.actualizar_evaluador(evaluador["id"], {
                 "completado": True,
                 "fecha_completado": datetime.now(timezone.utc).isoformat(),
             })
-
-            st.success("¡Tu evaluación ha sido guardada exitosamente! Gracias por tu feedback.")
-            st.balloons()
-            st.rerun()
-
         except Exception as e:
-            st.error(f"Error al guardar: {e}")
+            st.error(f"Tus respuestas fueron guardadas, pero ocurrió un error al cerrar la evaluación: {e}")
+            st.stop()
+
+        st.success("¡Tu evaluación ha sido guardada exitosamente! Gracias por tu feedback.")
+        st.balloons()
+        st.rerun()
