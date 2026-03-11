@@ -2820,6 +2820,7 @@ def pagina_mantenedores():
             rut_list = []
             for p in personas:
                 rows_p.append({
+                    "✓": False,
                     "RUT": p.get("pers_rut", ""),
                     "Nombres": p.get("pers_nombres", "") or "",
                     "Apellidos": p.get("pers_apellidos", "") or "",
@@ -2835,6 +2836,7 @@ def pagina_mantenedores():
                 hide_index=True,
                 key="editor_personas",
                 column_config={
+                    "✓": st.column_config.CheckboxColumn("✓", default=False, width="small"),
                     "RUT": st.column_config.TextColumn("RUT", disabled=True),
                     "Nombres": st.column_config.TextColumn("Nombres"),
                     "Apellidos": st.column_config.TextColumn("Apellidos"),
@@ -2844,7 +2846,8 @@ def pagina_mantenedores():
             )
             st.caption(f"{len(personas)} persona(s) registrada(s).")
 
-            if st.button("Guardar cambios personas", type="primary", key="btn_save_personas"):
+            col_g, col_e = st.columns(2)
+            if col_g.button("Guardar cambios", type="primary", key="btn_save_personas"):
                 errores = 0
                 for i, row in edited_p.iterrows():
                     rut = rut_list[i]
@@ -2863,6 +2866,16 @@ def pagina_mantenedores():
                     st.error(f"Error al guardar {errores} registro(s).")
                 else:
                     st.success("Cambios guardados correctamente.")
+                    st.rerun()
+
+            if col_e.button("Eliminar seleccionadas", key="btn_del_personas"):
+                seleccionados = [rut_list[i] for i, row in edited_p.iterrows() if row["✓"]]
+                if not seleccionados:
+                    st.warning("Marca al menos una persona para eliminar.")
+                else:
+                    for rut in seleccionados:
+                        queries.eliminar_persona_sist(rut)
+                    st.success(f"{len(seleccionados)} persona(s) eliminada(s).")
                     st.rerun()
 
         st.divider()
