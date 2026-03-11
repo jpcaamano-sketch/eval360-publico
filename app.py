@@ -1322,6 +1322,42 @@ def _parsear_practicas(texto_practicas):
     return practicas
 
 
+def _render_tabla_informe(df, num_cols):
+    """Renderiza tabla como HTML con columnas numéricas centradas, rojas y en negrita."""
+    import pandas as pd
+
+    def fmt(x):
+        if x is None or (isinstance(x, float) and pd.isna(x)):
+            return "—"
+        return f"<b style='color:#cc0000'>{x:.1f}</b>"
+
+    fmt_dict = {c: fmt for c in num_cols if c in df.columns}
+
+    html = (
+        df.style
+        .format(fmt_dict, na_rep="—")
+        .set_properties(subset=[c for c in df.columns if c in num_cols],
+                        **{"text-align": "center"})
+        .set_table_styles([
+            {"selector": "th", "props": [
+                ("text-align", "center"), ("background-color", "#e8f4f8"),
+                ("padding", "6px 14px"), ("font-size", "0.85rem"),
+                ("border-bottom", "2px solid #aaa"),
+            ]},
+            {"selector": "td", "props": [
+                ("padding", "4px 14px"), ("font-size", "0.85rem"),
+                ("border-bottom", "1px solid #ddd"),
+            ]},
+            {"selector": "table", "props": [
+                ("width", "100%"), ("border-collapse", "collapse"),
+            ]},
+        ])
+        .hide(axis="index")
+        .to_html(escape=False)
+    )
+    st.markdown(html, unsafe_allow_html=True)
+
+
 def _generar_word_informe(nombre, resultados_cat, resultados_comp, secciones, practicas_parseadas):
     """Genera el documento Word del informe."""
     doc = Document()
@@ -1551,18 +1587,16 @@ def pagina_informe_final():
         cols_amb = ["Ámbito", "Auto", "Prom. Feedback", "Diferencia"] + ev_nombres_t
         df_amb = pd.DataFrame(filas_amb)[cols_amb]
         num_cols_amb = ["Auto", "Prom. Feedback", "Diferencia"] + ev_nombres_t
-        col_cfg_amb = {c: st.column_config.NumberColumn(c, format="%.1f") for c in num_cols_amb}
         st.subheader("Resumen por Ámbito")
-        st.dataframe(df_amb, use_container_width=True, hide_index=True, column_config=col_cfg_amb)
+        _render_tabla_informe(df_amb, num_cols_amb)
 
         # Tabla notas por evaluador (después) — ordenada por categoría y luego por competencia
         filas_ev_sorted = sorted(filas_ev, key=lambda f: (f["_cat_orden"], f["_comp_orden"]))
         cols_order = ["Competencia", "Auto", "Prom. Feedback", "Diferencia"] + ev_nombres_t
         df_ev = pd.DataFrame(filas_ev_sorted)[cols_order]
-        st.subheader("Notas por Evaluador")
         num_cols_ev = ["Auto", "Prom. Feedback", "Diferencia"] + ev_nombres_t
-        col_cfg_ev = {c: st.column_config.NumberColumn(c, format="%.1f") for c in num_cols_ev}
-        st.dataframe(df_ev, use_container_width=True, hide_index=True, column_config=col_cfg_ev)
+        st.subheader("Notas por Evaluador")
+        _render_tabla_informe(df_ev, num_cols_ev)
         st.divider()
 
     if not plantilla_id:
