@@ -23,8 +23,6 @@ from docx.shared import Pt, Cm, RGBColor
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 import google.generativeai as genai
-import sys as _sys
-_sys.path.insert(0, "/Users/juancaamanovaldes/Aplicaciones Coaching/GeminiTracker")
 try:
     from gemini_logger import log_gemini as _log_gemini
 except Exception:
