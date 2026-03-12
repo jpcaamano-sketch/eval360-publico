@@ -3069,19 +3069,33 @@ def _tab_informe_externo():
     import pandas as pd
     import io as _io
 
+    if "inf_ext_v" not in st.session_state:
+        st.session_state["inf_ext_v"] = 0
+    v = st.session_state["inf_ext_v"]
+
     st.subheader("Informe desde Datos Externos")
     st.markdown("Pega los datos copiados desde Excel con columnas: **Ámbito · Competencia · Individual · Feedback**")
 
-    nombre = st.text_input("Nombre del participante", placeholder="Ej: Juan Pérez", key="inf_ext_nombre")
+    nombre = st.text_input("Nombre del participante", placeholder="Ej: Juan Pérez", key=f"inf_ext_nombre_{v}")
 
     datos_raw = st.text_area(
         "Datos (separados por tabulación o coma)",
         height=300,
         placeholder="Ámbito\tCompetencia\tIndividual\tFeedback\nComunicación\tEscucha activamente\t4\t4.5",
-        key="inf_ext_datos",
+        key=f"inf_ext_datos_{v}",
     )
 
-    if st.button("Generar Informe", type="primary", use_container_width=True, key="btn_inf_ext"):
+    col_gen, col_new = st.columns(2)
+    with col_new:
+        if st.button("Informe nuevo", use_container_width=True, key=f"btn_inf_nuevo_{v}"):
+            st.session_state["inf_ext_v"] = v + 1
+            st.session_state.pop("informe_ext", None)
+            st.rerun()
+
+    with col_gen:
+        generar = st.button("Generar Informe", type="primary", use_container_width=True, key=f"btn_inf_ext_{v}")
+
+    if generar:
         if not nombre.strip():
             st.error("Ingresa el nombre del participante.")
             return
