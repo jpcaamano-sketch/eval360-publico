@@ -3074,12 +3074,13 @@ def _tab_informe_externo():
     st.subheader("Informe desde Datos Externos")
     st.markdown("Pega los datos copiados desde Excel con columnas: **Ámbito · Competencia · Individual · Feedback**")
 
-    nombre = st.text_input("Nombre del participante", placeholder="Ej: Juan Pérez")
+    nombre = st.text_input("Nombre del participante", placeholder="Ej: Juan Pérez", key="inf_ext_nombre")
 
     datos_raw = st.text_area(
         "Datos (separados por tabulación o coma)",
         height=300,
         placeholder="Ámbito\tCompetencia\tIndividual\tFeedback\nComunicación\tEscucha activamente\t4\t4.5",
+        key="inf_ext_datos",
     )
 
     if st.button("Generar Informe", type="primary", use_container_width=True, key="btn_inf_ext"):
@@ -3094,7 +3095,6 @@ def _tab_informe_externo():
         try:
             sep = "\t" if "\t" in datos_raw else ","
             df = pd.read_csv(_io.StringIO(datos_raw), sep=sep, header=None)
-            # Si primera fila parece encabezado (contiene texto no numérico en col 2)
             try:
                 float(df.iloc[0, 2])
             except (ValueError, TypeError):
@@ -3151,14 +3151,6 @@ def _tab_informe_externo():
                 "diferencia": round(fb_r - auto_r, 1),
             })
 
-        # ── Mostrar tabla resumen ──────────────────────────────
-        st.divider()
-        st.subheader("Resumen por Ámbito")
-        df_cat = pd.DataFrame(resultados_cat)[["categoria", "auto", "feedback", "diferencia"]]
-        df_cat.columns = ["Ámbito", "Auto", "Feedback", "Diferencia"]
-        _render_tabla_informe(df_cat, ["Auto", "Feedback", "Diferencia"])
-
-        # ── Generar informe IA ─────────────────────────────────
         with st.spinner("Generando análisis con IA..."):
             try:
                 texto_ia = _generar_contenido_ia(nombre.strip(), resultados_cat, resultados_comp)
@@ -3179,50 +3171,154 @@ def _tab_informe_externo():
         return
 
     inf = st.session_state["informe_ext"]
-    nombre      = inf["nombre"]
-    secciones   = inf["secciones"]
-    practicas   = inf["practicas"]
+    nombre          = inf["nombre"]
+    secciones       = inf["secciones"]
+    practicas_parseadas = inf["practicas"]
     resultados_cat  = inf["resultados_cat"]
     resultados_comp = inf["resultados_comp"]
 
     st.divider()
-    st.markdown(f"## Informe Final 360° — {nombre}")
+    st.markdown("## INFORME FINAL 360")
+    st.markdown(f"**Participante:** {nombre}")
+
+    # 1. Resumen Ejecutivo
     st.markdown("### 1. Resumen Ejecutivo")
     st.markdown(secciones.get("RESUMEN_EJECUTIVO", ""))
 
+    # 2. Análisis por Categoría
     st.markdown("### 2. Análisis por Categoría")
-    _render_tabla_informe(
-        pd.DataFrame(resultados_cat).rename(columns={
-            "categoria": "Categoría", "auto": "Autoevaluación",
-            "feedback": "Feedback", "diferencia": "Diferencia"
-        })[["Categoría", "Autoevaluación", "Feedback", "Diferencia"]],
-        ["Autoevaluación", "Feedback", "Diferencia"]
-    )
+    hc = st.columns([3, 1.5, 1.5, 1.5])
+    hc[0].markdown("**Categoría**")
+    hc[1].markdown("**Autoevaluación**")
+    hc[2].markdown("**Feedback**")
+    hc[3].markdown("**Diferencia**")
+    st.markdown("---")
+
+    def _fmt_val_ext(col, v):
+        if v is None:
+            col.caption("—")
+        elif v < 0:
+            col.markdown(f"**:red[{v:.1f}]**")
+        else:
+            col.caption(f"{v:.1f}")
+
+    for cat in resultados_cat:
+        rc = st.columns([3, 1.5, 1.5, 1.5])
+        rc[0].caption(cat["categoria"])
+        _fmt_val_ext(rc[1], cat["auto"])
+        _fmt_val_ext(rc[2], cat["feedback"])
+        _fmt_val_ext(rc[3], cat["diferencia"])
+
+    st.markdown("")
     st.markdown(secciones.get("ANALISIS_CATEGORIAS", ""))
 
-    st.markdown("### 3. Prácticas de Desarrollo")
-    if practicas:
-        for p in practicas:
-            with st.expander(f"📌 {p.get('competencia', '')}"):
-                st.markdown(f"**Objetivo:** {p.get('objetivo', '')}")
-                st.markdown(f"**Descripción:** {p.get('descripcion', '')}")
-                st.caption(f"Participantes: {p.get('participantes', '—')}")
-                st.caption(f"Duración: {p.get('duracion', '—')}")
-                st.caption(f"KPI: {p.get('kpi', '—')}")
+    # 3. Análisis por Competencia
+    st.markdown("### 3. Análisis por Competencias por Categoría")
+    cats_unicas = []
+    for c in resultados_comp:
+        if c["categoria"] not in cats_unicas:
+            cats_unicas.append(c["categoria"])
 
+    for cat in cats_unicas:
+        st.markdown(f"#### {cat}")
+        comps_cat = [c for c in resultados_comp if c["categoria"] == cat]
+
+        hc2 = st.columns([3, 1.2, 1.2, 1.2, 1.5])
+        hc2[0].markdown("**Competencia**")
+        hc2[1].markdown("**Auto**")
+        hc2[2].markdown("**Feedback**")
+        hc2[3].markdown("**Diferencia**")
+        hc2[4].markdown("**Recomendación**")
+        st.markdown("---")
+
+        for comp in comps_cat:
+            rc2 = st.columns([3, 1.2, 1.2, 1.2, 1.5])
+            rc2[0].caption(comp["texto_feedback"])
+            _fmt_val_ext(rc2[1], comp["auto"])
+            _fmt_val_ext(rc2[2], comp["feedback"])
+            _fmt_val_ext(rc2[3], comp["diferencia"])
+            if comp["recomendacion"] == "Mejorar":
+                rc2[4].markdown(f"**:red[{comp['recomendacion']}]**")
+            else:
+                rc2[4].caption(comp["recomendacion"])
+
+        comps_aprender = [c for c in comps_cat if c["recomendacion"] == "Mejorar"]
+        if comps_aprender:
+            st.markdown("**Prácticas de aprendizaje:**")
+            for comp in comps_aprender:
+                practica = None
+                for pr in practicas_parseadas:
+                    if pr.get("competencia", "").lower() in comp["texto_feedback"].lower() or \
+                       comp["texto_feedback"].lower() in pr.get("competencia", "").lower():
+                        practica = pr
+                        break
+                if practica:
+                    with st.container(border=True):
+                        st.markdown(f"**{comp['texto_feedback']}**")
+                        st.caption(f"Objetivo: {practica.get('objetivo', '—')}")
+                        st.caption(f"Descripción: {practica.get('descripcion', '—')}")
+                        st.caption(f"Participantes: {practica.get('participantes', '—')}")
+                        st.caption(f"Duración: {practica.get('duracion', '—')}")
+                        st.caption(f"KPI: {practica.get('kpi', '—')}")
+        st.divider()
+
+    # 4. Conclusiones
     st.markdown("### 4. Conclusiones")
     st.markdown(secciones.get("CONCLUSIONES", ""))
 
-    # ── Descarga Word ──────────────────────────────────────────
+    # Descargas
     st.divider()
-    buf_word = _generar_word_informe(nombre, resultados_cat, resultados_comp, secciones, practicas)
-    st.download_button(
-        "Descargar Word",
-        data=buf_word,
-        file_name=f"informe_360_{nombre.replace(' ', '_')}.docx",
-        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        key="dl_inf_ext_word",
-    )
+    st.subheader("Descargar informe")
+    col_w, col_x = st.columns(2)
+
+    with col_w:
+        buf_word = _generar_word_informe(nombre, resultados_cat, resultados_comp, secciones, practicas_parseadas)
+        st.download_button("Descargar Word", data=buf_word,
+                           file_name=f"informe_360_{nombre.replace(' ', '_')}.docx",
+                           mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                           key="dl_inf_ext_word")
+
+    with col_x:
+        wb = Workbook()
+        ws1 = wb.active
+        ws1.title = "Por Categoría"
+        h_font = Font(bold=True, color="FFFFFF", size=10)
+        h_fill = PatternFill(start_color="1A1A2E", end_color="1A1A2E", fill_type="solid")
+        for i, h in enumerate(["Categoría", "Autoevaluación", "Feedback", "Diferencia"], 1):
+            cell = ws1.cell(row=1, column=i, value=h)
+            cell.font = h_font; cell.fill = h_fill
+        for idx, cat in enumerate(resultados_cat, 2):
+            ws1.cell(row=idx, column=1, value=cat["categoria"])
+            for col_i, key in [(2, "auto"), (3, "feedback"), (4, "diferencia")]:
+                val = cat[key]
+                c = ws1.cell(row=idx, column=col_i, value=val)
+                if val is not None: c.number_format = "0.0"
+        for col in ws1.columns:
+            ws1.column_dimensions[col[0].column_letter].width = max(len(str(c.value or "")) + 2 for c in col)
+
+        ws2 = wb.create_sheet("Por Competencia")
+        headers2 = ["Categoría", "Competencia", "Autoevaluación", "Feedback", "Diferencia", "Recomendación"]
+        for i, h in enumerate(headers2, 1):
+            cell = ws2.cell(row=1, column=i, value=h)
+            cell.font = h_font; cell.fill = h_fill
+        for idx, comp in enumerate(resultados_comp, 2):
+            ws2.cell(row=idx, column=1, value=comp["categoria"])
+            ws2.cell(row=idx, column=2, value=comp["texto_feedback"])
+            for col_i, key in [(3, "auto"), (4, "feedback"), (5, "diferencia")]:
+                val = comp[key]
+                c = ws2.cell(row=idx, column=col_i, value=val)
+                if val is not None: c.number_format = "0.0"
+            ws2.cell(row=idx, column=6, value=comp["recomendacion"])
+        for col in ws2.columns:
+            ws2.column_dimensions[col[0].column_letter].width = max(len(str(c.value or "")) + 2 for c in col)
+
+        buf_x = io.BytesIO()
+        wb.save(buf_x)
+        buf_x.seek(0)
+        st.download_button("Descargar Excel", data=buf_x,
+                           file_name=f"informe_360_{nombre.replace(' ', '_')}.xlsx",
+                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                           key="dl_inf_ext_excel")
 
 
 # ============================================================
