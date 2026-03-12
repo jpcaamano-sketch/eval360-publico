@@ -23,6 +23,12 @@ from docx.shared import Pt, Cm, RGBColor
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 import google.generativeai as genai
+import sys as _sys
+_sys.path.insert(0, "/Users/juancaamanovaldes/Aplicaciones Coaching/GeminiTracker")
+try:
+    from gemini_logger import log_gemini as _log_gemini
+except Exception:
+    def _log_gemini(*a, **k): pass
 
 st.set_page_config(page_title="Evaluación 360°", page_icon="📊", layout="wide")
 
@@ -1416,20 +1422,26 @@ def _calcular_puntajes_360(participante_id, plantilla_id):
     resultados_comp = []
     for comp in competencias:
         cid = comp["id"]
-        auto = auto_scores.get(cid, 0)
+        auto = auto_scores.get(cid) or None  # None o 0 → None
         fb_list_raw = feedback_scores.get(cid, [])
-        fb_list = [p for _, p in fb_list_raw]
-        fb_avg = sum(fb_list) / len(fb_list) if fb_list else 0
-        diff = round(fb_avg - auto, 1)
-        mejorar = (auto < UMBRAL_MEJORAR) or (fb_avg > 0 and fb_avg < UMBRAL_MEJORAR) or (fb_avg > 0 and fb_avg < auto)
+        fb_list = [p for _, p in fb_list_raw if p]  # excluir 0 y None
+        fb_avg = sum(fb_list) / len(fb_list) if fb_list else None
+        auto_r = round(auto, 1) if auto is not None else None
+        fb_r   = round(fb_avg, 1) if fb_avg is not None else None
+        diff   = round(fb_r - auto_r, 1) if (fb_r is not None and auto_r is not None) else None
+        mejorar = (
+            (auto_r is not None and auto_r < UMBRAL_MEJORAR) or
+            (fb_r is not None and fb_r < UMBRAL_MEJORAR) or
+            (fb_r is not None and auto_r is not None and fb_r < auto_r)
+        )
         recomendacion = "Mejorar" if mejorar else "Mantener"
         resultados_comp.append({
             "competencia_id": cid,
             "categoria": comp["categoria_nombre"],
             "texto_auto": comp["texto_auto"],
             "texto_feedback": comp["texto_feedback"],
-            "auto": round(auto, 1),
-            "feedback": round(fb_avg, 1),
+            "auto": auto_r,
+            "feedback": fb_r,
             "diferencia": diff,
             "recomendacion": recomendacion,
             "notas_por_evaluador": {ev_id: p for ev_id, p in fb_list_raw},
@@ -1440,18 +1452,22 @@ def _calcular_puntajes_360(participante_id, plantilla_id):
         cat = r["categoria"]
         if cat not in cat_map:
             cat_map[cat] = {"auto": [], "feedback": []}
-        cat_map[cat]["auto"].append(r["auto"])
-        cat_map[cat]["feedback"].append(r["feedback"])
+        if r["auto"]:
+            cat_map[cat]["auto"].append(r["auto"])
+        if r["feedback"]:
+            cat_map[cat]["feedback"].append(r["feedback"])
 
     resultados_cat = []
     for cat, scores in cat_map.items():
-        auto_avg = sum(scores["auto"]) / len(scores["auto"]) if scores["auto"] else 0
-        fb_avg   = sum(scores["feedback"]) / len(scores["feedback"]) if scores["feedback"] else 0
+        auto_avg = sum(scores["auto"]) / len(scores["auto"]) if scores["auto"] else None
+        fb_avg   = sum(scores["feedback"]) / len(scores["feedback"]) if scores["feedback"] else None
+        auto_r   = round(auto_avg, 1) if auto_avg is not None else None
+        fb_r     = round(fb_avg, 1)   if fb_avg   is not None else None
         resultados_cat.append({
-            "categoria": cat,
-            "auto": round(auto_avg, 1),
-            "feedback": round(fb_avg, 1),
-            "diferencia": round(fb_avg - auto_avg, 1),
+            "categoria":  cat,
+            "auto":       auto_r,
+            "feedback":   fb_r,
+            "diferencia": round(fb_r - auto_r, 1) if (fb_r is not None and auto_r is not None) else None,
         })
 
     return resultados_cat, resultados_comp
@@ -1460,9 +1476,12 @@ def _calcular_puntajes_360(participante_id, plantilla_id):
 def _generar_contenido_ia(nombre_participante, resultados_cat, resultados_comp):
     """Llama a la API de Anthropic para generar el contenido del informe."""
     # Construir resumen de datos para el prompt
+    def _fmt(v):
+        return f"{v:.1f}" if v is not None else "S/D"
+
     tabla_cat = "Categoría | Autoevaluación | Feedback | Diferencia\n"
     for c in resultados_cat:
-        tabla_cat += f"{c['categoria']} | {c['auto']} | {c['feedback']} | {c['diferencia']}\n"
+        tabla_cat += f"{c['categoria']} | {_fmt(c['auto'])} | {_fmt(c['feedback'])} | {_fmt(c['diferencia'])}\n"
 
     tablas_comp = ""
     cats_unicas = []
@@ -1475,7 +1494,7 @@ def _generar_contenido_ia(nombre_participante, resultados_cat, resultados_comp):
         tablas_comp += f"\nCategoría: {cat}\n"
         tablas_comp += "Competencia | Auto | Feedback | Diferencia | Recomendación\n"
         for c in comps_cat:
-            tablas_comp += f"{c['texto_feedback']} | {c['auto']} | {c['feedback']} | {c['diferencia']} | {c['recomendacion']}\n"
+            tablas_comp += f"{c['texto_feedback']} | {_fmt(c['auto'])} | {_fmt(c['feedback'])} | {_fmt(c['diferencia'])} | {c['recomendacion']}\n"
 
     prompt = f"""Eres un consultor experto en desarrollo organizacional y evaluaciones 360°.
 Genera un informe completo en español para {nombre_participante} basándote en estos resultados:
@@ -1513,11 +1532,13 @@ KPI: [indicador de medición]
 ===CONCLUSIONES===
 Escribe 2-3 párrafos con conclusiones generales y próximos pasos recomendados.
 
-Escribe de forma profesional, directa y constructiva. No uses markdown. Usa lenguaje en tercera persona."""
+Escribe de forma profesional, directa y constructiva. No uses markdown. Usa lenguaje en tercera persona.
+IMPORTANTE: Usa EXACTAMENTE los valores numéricos de las tablas proporcionadas. NO recalcules ni estimes ningún valor numérico."""
 
     genai.configure(api_key=GOOGLE_API_KEY)
     model = genai.GenerativeModel("gemini-2.5-flash")
     response = model.generate_content(prompt)
+    _log_gemini("Evaluacion360", "gemini-2.5-flash", response, "Informe Final 360")
     return response.text
 
 
@@ -1565,6 +1586,13 @@ def _parsear_practicas(texto_practicas):
         if practica.get("competencia"):
             practicas.append(practica)
     return practicas
+
+
+def _f1(v):
+    """Formatea un valor numérico a 1 decimal. Devuelve '—' si es None."""
+    if v is None:
+        return "—"
+    return f"{v:.1f}"
 
 
 def _render_tabla_informe(df, num_cols):
@@ -1639,9 +1667,9 @@ def _generar_word_informe(nombre, resultados_cat, resultados_comp, secciones, pr
     for cat in resultados_cat:
         row = table.add_row()
         row.cells[0].text = cat["categoria"]
-        row.cells[1].text = f"{cat['auto']:.1f}"
-        row.cells[2].text = f"{cat['feedback']:.1f}"
-        row.cells[3].text = f"{cat['diferencia']:.1f}"
+        row.cells[1].text = _f1(cat["auto"])
+        row.cells[2].text = _f1(cat["feedback"])
+        row.cells[3].text = _f1(cat["diferencia"])
         for cell in row.cells:
             for p in cell.paragraphs:
                 for run in p.runs:
@@ -1675,9 +1703,9 @@ def _generar_word_informe(nombre, resultados_cat, resultados_comp, secciones, pr
         for comp in comps_cat:
             row = table.add_row()
             row.cells[0].text = comp["texto_feedback"]
-            row.cells[1].text = f"{comp['auto']:.1f}"
-            row.cells[2].text = f"{comp['feedback']:.1f}"
-            row.cells[3].text = f"{comp['diferencia']:.1f}"
+            row.cells[1].text = _f1(comp["auto"])
+            row.cells[2].text = _f1(comp["feedback"])
+            row.cells[3].text = _f1(comp["diferencia"])
             row.cells[4].text = comp["recomendacion"]
             for cell in row.cells:
                 for p in cell.paragraphs:
@@ -1794,7 +1822,7 @@ def pagina_informe_final():
         filas_ev = []
         for comp in competencias_pl:
             resp_auto = next((r for r in todas_resp if r["competencia_id"] == comp["id"] and r.get("es_autoevaluacion")), None)
-            auto_val = resp_auto["puntaje"] if resp_auto else None
+            auto_val = (resp_auto["puntaje"] if resp_auto else None) or None  # 0 → None
             notas_fb = []
             fila = {
                 "_cat_orden": comp.get("_cat_orden", 0),
@@ -1805,9 +1833,9 @@ def pagina_informe_final():
             }
             for ev_id, ev_nom in zip(ev_ids_t, ev_nombres_t):
                 resp = next((r for r in todas_resp if r["competencia_id"] == comp["id"] and r.get("evaluador_id") == ev_id), None)
-                nota = resp["puntaje"] if resp else None
+                nota = (resp["puntaje"] if resp else None) or None  # 0 → None
                 fila[ev_nom] = nota
-                if nota is not None:
+                if nota:
                     notas_fb.append(nota)
             prom_fb = round(sum(notas_fb) / len(notas_fb), 1) if notas_fb else None
             diff = round(prom_fb - auto_val, 1) if (prom_fb is not None and auto_val is not None) else None
@@ -1821,12 +1849,12 @@ def pagina_informe_final():
             amb = fila["Ámbito"]
             if amb not in ambitos:
                 ambitos[amb] = {"auto": [], "prom_fb": [], "ev": {n: [] for n in ev_nombres_t}}
-            if fila["Auto"] is not None:
+            if fila["Auto"]:
                 ambitos[amb]["auto"].append(fila["Auto"])
-            if fila["Prom. Feedback"] is not None:
+            if fila["Prom. Feedback"]:
                 ambitos[amb]["prom_fb"].append(fila["Prom. Feedback"])
             for ev_nom in ev_nombres_t:
-                if fila.get(ev_nom) is not None:
+                if fila.get(ev_nom):
                     ambitos[amb]["ev"][ev_nom].append(fila[ev_nom])
 
         filas_amb = []
@@ -2006,8 +2034,10 @@ def pagina_informe_final():
         for idx, cat in enumerate(resultados_cat, 2):
             ws1.cell(row=idx, column=1, value=cat["categoria"])
             for col_i, key in [(2, "auto"), (3, "feedback"), (4, "diferencia")]:
-                c = ws1.cell(row=idx, column=col_i, value=cat[key])
-                c.number_format = "0.0"
+                val = cat[key]
+                c = ws1.cell(row=idx, column=col_i, value=val)
+                if val is not None:
+                    c.number_format = "0.0"
         for col in ws1.columns:
             max_len = max(len(str(c.value or "")) for c in col)
             ws1.column_dimensions[col[0].column_letter].width = max(max_len + 2, 14)
@@ -2025,15 +2055,24 @@ def pagina_informe_final():
             col = 1
             ws2.cell(row=idx, column=col, value=comp["categoria"]); col += 1
             ws2.cell(row=idx, column=col, value=comp["texto_feedback"]); col += 1
-            c = ws2.cell(row=idx, column=col, value=comp["auto"]); c.number_format = "0.0"; col += 1
+            val_auto = comp["auto"]
+            c = ws2.cell(row=idx, column=col, value=val_auto)
+            if val_auto is not None: c.number_format = "0.0"
+            col += 1
             for ev_id in ev_ids:
-                nota = comp.get("notas_por_evaluador", {}).get(ev_id, "")
+                nota = comp.get("notas_por_evaluador", {}).get(ev_id)
                 c2 = ws2.cell(row=idx, column=col, value=nota)
-                if nota != "":
+                if nota is not None:
                     c2.number_format = "0.0"
                 col += 1
-            c = ws2.cell(row=idx, column=col, value=comp["feedback"]); c.number_format = "0.0"; col += 1
-            c = ws2.cell(row=idx, column=col, value=comp["diferencia"]); c.number_format = "0.0"; col += 1
+            val_fb = comp["feedback"]
+            c = ws2.cell(row=idx, column=col, value=val_fb)
+            if val_fb is not None: c.number_format = "0.0"
+            col += 1
+            val_diff = comp["diferencia"]
+            c = ws2.cell(row=idx, column=col, value=val_diff)
+            if val_diff is not None: c.number_format = "0.0"
+            col += 1
             ws2.cell(row=idx, column=col, value=comp["recomendacion"]); col += 1
         for col in ws2.columns:
             max_len = max(len(str(c.value or "")) for c in col)
@@ -2399,6 +2438,7 @@ def _contenido_importar_encuesta_csv():
                 genai.configure(api_key=GOOGLE_API_KEY)
                 model = genai.GenerativeModel("gemini-2.5-flash")
                 respuesta = model.generate_content(prompt)
+                _log_gemini("Evaluacion360", "gemini-2.5-flash", respuesta, "Conversión texto feedback")
                 lineas = [
                     l.strip()
                     for l in respuesta.text.strip().split("\n")
@@ -3009,10 +3049,11 @@ def _tab_ingreso_evaluadores():
 def pagina_ingresos_especiales():
     st.header("Ingresos Especiales")
 
-    tab_ev, tab_auto, tab_fb = st.tabs([
+    tab_ev, tab_auto, tab_fb, tab_ext = st.tabs([
         "Ingreso Evaluadores",
         "Ingreso Respuesta Autoevaluación",
         "Ingreso Respuestas Feedback",
+        "Informe desde Datos Externos",
     ])
 
     with tab_ev:
@@ -3021,6 +3062,167 @@ def pagina_ingresos_especiales():
         _tab_ingreso_auto()
     with tab_fb:
         _tab_ingreso_feedback()
+    with tab_ext:
+        _tab_informe_externo()
+
+
+def _tab_informe_externo():
+    """Genera informe 360 desde datos pegados directamente (sin DB)."""
+    import pandas as pd
+    import io as _io
+
+    st.subheader("Informe desde Datos Externos")
+    st.markdown("Pega los datos copiados desde Excel con columnas: **Ámbito · Competencia · Individual · Feedback**")
+
+    nombre = st.text_input("Nombre del participante", placeholder="Ej: Juan Pérez")
+
+    datos_raw = st.text_area(
+        "Datos (separados por tabulación o coma)",
+        height=300,
+        placeholder="Ámbito\tCompetencia\tIndividual\tFeedback\nComunicación\tEscucha activamente\t4\t4.5",
+    )
+
+    if st.button("Generar Informe", type="primary", use_container_width=True, key="btn_inf_ext"):
+        if not nombre.strip():
+            st.error("Ingresa el nombre del participante.")
+            return
+        if not datos_raw.strip():
+            st.error("Pega los datos antes de generar.")
+            return
+
+        # ── Parsear datos ──────────────────────────────────────
+        try:
+            sep = "\t" if "\t" in datos_raw else ","
+            df = pd.read_csv(_io.StringIO(datos_raw), sep=sep, header=None)
+            # Si primera fila parece encabezado (contiene texto no numérico en col 2)
+            try:
+                float(df.iloc[0, 2])
+            except (ValueError, TypeError):
+                df = df.iloc[1:].reset_index(drop=True)
+            df.columns = ["ambito", "competencia", "auto", "feedback"]
+            df["auto"]     = pd.to_numeric(df["auto"],     errors="coerce")
+            df["feedback"] = pd.to_numeric(df["feedback"], errors="coerce")
+            df = df.dropna(subset=["auto", "feedback"])
+            df = df[df["auto"] > 0]
+            df = df[df["feedback"] > 0]
+        except Exception as e:
+            st.error(f"Error al leer los datos: {e}")
+            return
+
+        if df.empty:
+            st.error("No se encontraron datos válidos.")
+            return
+
+        # ── Calcular por competencia ───────────────────────────
+        resultados_comp = []
+        for _, row in df.iterrows():
+            auto_r = round(float(row["auto"]), 1)
+            fb_r   = round(float(row["feedback"]), 1)
+            diff   = round(fb_r - auto_r, 1)
+            mejorar = (auto_r < UMBRAL_MEJORAR) or (fb_r < UMBRAL_MEJORAR) or (fb_r < auto_r)
+            resultados_comp.append({
+                "categoria":      str(row["ambito"]).strip(),
+                "texto_auto":     str(row["competencia"]).strip(),
+                "texto_feedback": str(row["competencia"]).strip(),
+                "auto":           auto_r,
+                "feedback":       fb_r,
+                "diferencia":     diff,
+                "recomendacion":  "Mejorar" if mejorar else "Mantener",
+                "notas_por_evaluador": {},
+            })
+
+        # ── Calcular por categoría ─────────────────────────────
+        cat_map = {}
+        for r in resultados_comp:
+            cat = r["categoria"]
+            if cat not in cat_map:
+                cat_map[cat] = {"auto": [], "feedback": []}
+            cat_map[cat]["auto"].append(r["auto"])
+            cat_map[cat]["feedback"].append(r["feedback"])
+
+        resultados_cat = []
+        for cat, scores in cat_map.items():
+            auto_r = round(sum(scores["auto"]) / len(scores["auto"]), 1)
+            fb_r   = round(sum(scores["feedback"]) / len(scores["feedback"]), 1)
+            resultados_cat.append({
+                "categoria":  cat,
+                "auto":       auto_r,
+                "feedback":   fb_r,
+                "diferencia": round(fb_r - auto_r, 1),
+            })
+
+        # ── Mostrar tabla resumen ──────────────────────────────
+        st.divider()
+        st.subheader("Resumen por Ámbito")
+        df_cat = pd.DataFrame(resultados_cat)[["categoria", "auto", "feedback", "diferencia"]]
+        df_cat.columns = ["Ámbito", "Auto", "Feedback", "Diferencia"]
+        _render_tabla_informe(df_cat, ["Auto", "Feedback", "Diferencia"])
+
+        # ── Generar informe IA ─────────────────────────────────
+        with st.spinner("Generando análisis con IA..."):
+            try:
+                texto_ia = _generar_contenido_ia(nombre.strip(), resultados_cat, resultados_comp)
+                secciones = _parsear_contenido_ia(texto_ia)
+                practicas = _parsear_practicas(secciones.get("PRACTICAS", ""))
+                st.session_state["informe_ext"] = {
+                    "resultados_cat":  resultados_cat,
+                    "resultados_comp": resultados_comp,
+                    "secciones":       secciones,
+                    "practicas":       practicas,
+                    "nombre":          nombre.strip(),
+                }
+            except Exception as e:
+                st.error(f"Error al generar informe: {e}")
+                return
+
+    if "informe_ext" not in st.session_state:
+        return
+
+    inf = st.session_state["informe_ext"]
+    nombre      = inf["nombre"]
+    secciones   = inf["secciones"]
+    practicas   = inf["practicas"]
+    resultados_cat  = inf["resultados_cat"]
+    resultados_comp = inf["resultados_comp"]
+
+    st.divider()
+    st.markdown(f"## Informe Final 360° — {nombre}")
+    st.markdown("### 1. Resumen Ejecutivo")
+    st.markdown(secciones.get("RESUMEN_EJECUTIVO", ""))
+
+    st.markdown("### 2. Análisis por Categoría")
+    _render_tabla_informe(
+        pd.DataFrame(resultados_cat).rename(columns={
+            "categoria": "Categoría", "auto": "Autoevaluación",
+            "feedback": "Feedback", "diferencia": "Diferencia"
+        })[["Categoría", "Autoevaluación", "Feedback", "Diferencia"]],
+        ["Autoevaluación", "Feedback", "Diferencia"]
+    )
+    st.markdown(secciones.get("ANALISIS_CATEGORIAS", ""))
+
+    st.markdown("### 3. Prácticas de Desarrollo")
+    if practicas:
+        for p in practicas:
+            with st.expander(f"📌 {p.get('competencia', '')}"):
+                st.markdown(f"**Objetivo:** {p.get('objetivo', '')}")
+                st.markdown(f"**Descripción:** {p.get('descripcion', '')}")
+                st.caption(f"Participantes: {p.get('participantes', '—')}")
+                st.caption(f"Duración: {p.get('duracion', '—')}")
+                st.caption(f"KPI: {p.get('kpi', '—')}")
+
+    st.markdown("### 4. Conclusiones")
+    st.markdown(secciones.get("CONCLUSIONES", ""))
+
+    # ── Descarga Word ──────────────────────────────────────────
+    st.divider()
+    buf_word = _generar_word_informe(nombre, resultados_cat, resultados_comp, secciones, practicas)
+    st.download_button(
+        "Descargar Word",
+        data=buf_word,
+        file_name=f"informe_360_{nombre.replace(' ', '_')}.docx",
+        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        key="dl_inf_ext_word",
+    )
 
 
 # ============================================================
