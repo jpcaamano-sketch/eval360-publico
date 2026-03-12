@@ -7,7 +7,7 @@ import io
 import streamlit as st
 import streamlit.components.v1 as components
 from datetime import datetime, timezone
-from core.config import ESCALA, GOOGLE_API_KEY, ADMIN_PASSWORD, UMBRAL_MEJORAR, MIN_EVALUADORES, MAX_EVALUADORES
+from core.config import ESCALA, GOOGLE_API_KEY, UMBRAL_MEJORAR, MIN_EVALUADORES, MAX_EVALUADORES
 from core.styles import ADMIN_CSS
 from core import queries
 from core.email_service import (
@@ -26,24 +26,6 @@ import google.generativeai as genai
 
 st.set_page_config(page_title="Evaluación 360° Admin", page_icon="📊", layout="wide")
 st.markdown(ADMIN_CSS, unsafe_allow_html=True)
-
-# ============================================================
-# AUTENTICACIÓN
-# ============================================================
-
-if "autenticado" not in st.session_state:
-    st.session_state["autenticado"] = False
-
-if not st.session_state["autenticado"]:
-    st.title("Evaluación 360° — Admin")
-    pwd = st.text_input("Contraseña", type="password", key="login_pwd")
-    if st.button("Ingresar", type="primary"):
-        if pwd == ADMIN_PASSWORD:
-            st.session_state["autenticado"] = True
-            st.rerun()
-        else:
-            st.error("Contraseña incorrecta.")
-    st.stop()
 
 # ============================================================
 # SIDEBAR
