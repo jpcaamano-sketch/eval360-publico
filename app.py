@@ -1934,7 +1934,9 @@ def pagina_informe_final():
     hc[3].markdown("**Diferencia**")
     st.markdown("---")
     def _fmt_val(col, v):
-        if v < 0:
+        if v is None:
+            col.caption("—")
+        elif v < 0:
             col.markdown(f"**:red[{v:.1f}]**")
         else:
             col.caption(f"{v:.1f}")
