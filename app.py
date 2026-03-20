@@ -248,6 +248,7 @@ MENU_OPTIONS = [
     "Seguimiento Autoevaluaciones",
     "Seguimiento Feedback",
     "Informe Final 360",
+    "Cuestionario Complementario",
     "Ingresos Especiales",
 ]
 
@@ -3500,6 +3501,143 @@ def pagina_mantenedores():
 
 
 # ============================================================
+# PÁGINA: CUESTIONARIO COMPLEMENTARIO
+# ============================================================
+
+def pagina_cuestionario_complementario():
+    from core.email_service import enviar_invitacion_cc
+
+    st.header("Cuestionario Complementario")
+    st.caption("Feedback cualitativo de liderazgo — solo 3 preguntas abiertas, sin autoevaluación.")
+
+    tab_ev, tab_resp = st.tabs(["👤 Evaluados", "📋 Respuestas"])
+
+    # ── TAB: EVALUADOS ────────────────────────────────────────
+    with tab_ev:
+        evaluados = queries.cc_listar_evaluados()
+
+        # Formulario nuevo evaluado
+        with st.expander("➕ Nuevo evaluado", expanded=not evaluados):
+            with st.form("form_nuevo_evaluado"):
+                c1, c2, c3 = st.columns(3)
+                nuevo_nombre = c1.text_input("Nombre completo")
+                nuevo_cargo  = c2.text_input("Cargo")
+                nuevo_area   = c3.text_input("Área")
+                if st.form_submit_button("Crear evaluado"):
+                    if not nuevo_nombre.strip():
+                        st.error("El nombre es obligatorio.")
+                    else:
+                        queries.cc_crear_evaluado(nuevo_nombre.strip(), nuevo_cargo.strip(), nuevo_area.strip())
+                        st.success(f"Evaluado '{nuevo_nombre}' creado.")
+                        st.rerun()
+
+        if not evaluados:
+            st.info("No hay evaluados creados aún.")
+            return
+
+        # Selector de evaluado
+        ev_opts = {f"{e['nombre']} ({e.get('cargo','') or '—'})": e for e in evaluados}
+        ev_lbl  = st.selectbox("Seleccionar evaluado", list(ev_opts.keys()), key="cc_ev_sel")
+        evaluado = ev_opts[ev_lbl]
+        ev_id    = evaluado["id"]
+
+        col_i, col_d = st.columns([4, 1])
+        col_i.markdown(f"**Área:** {evaluado.get('area') or '—'}")
+        if col_d.button("🗑️ Eliminar evaluado", key="cc_del_ev"):
+            queries.cc_eliminar_evaluado(ev_id)
+            st.rerun()
+
+        st.divider()
+
+        # Evaluadores del evaluado seleccionado
+        st.subheader("Evaluadores")
+        evaluadores = queries.cc_listar_evaluadores(ev_id)
+
+        # Agregar evaluador
+        with st.form("form_nuevo_evaluador_cc"):
+            ca, cb = st.columns(2)
+            nuevo_ev_nom    = ca.text_input("Nombre evaluador")
+            nuevo_ev_correo = cb.text_input("Correo")
+            if st.form_submit_button("Agregar evaluador"):
+                if not nuevo_ev_nom.strip() or not nuevo_ev_correo.strip():
+                    st.error("Nombre y correo son obligatorios.")
+                else:
+                    queries.cc_crear_evaluador(ev_id, nuevo_ev_nom.strip(), nuevo_ev_correo.strip())
+                    st.rerun()
+
+        if not evaluadores:
+            st.info("Sin evaluadores agregados.")
+        else:
+            for ev in evaluadores:
+                completado = ev.get("completado", False)
+                inv_env    = ev.get("invitacion_enviada", False)
+                col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
+                col1.write(ev["nombre"])
+                col2.write(ev.get("correo") or "—")
+                col3.write("✅ Completado" if completado else ("📨 Invitación enviada" if inv_env else "⏳ Pendiente"))
+                if col4.button("🗑️", key=f"cc_del_ev_{ev['id']}"):
+                    queries.cc_eliminar_evaluador(ev["id"])
+                    st.rerun()
+
+            st.divider()
+            pendientes = [e for e in evaluadores if not e.get("invitacion_enviada") and not e.get("completado")]
+            if pendientes:
+                if st.button(f"📨 Enviar invitaciones ({len(pendientes)} pendientes)", key="cc_enviar_inv"):
+                    ok = err = 0
+                    for e in pendientes:
+                        try:
+                            enviar_invitacion_cc(e, evaluado["nombre"])
+                            queries.cc_marcar_invitacion_enviada(e["id"])
+                            ok += 1
+                        except Exception as ex:
+                            st.warning(f"Error enviando a {e['nombre']}: {ex}")
+                            err += 1
+                    st.success(f"✅ {ok} invitaciones enviadas." + (f" ⚠️ {err} errores." if err else ""))
+                    st.rerun()
+            else:
+                st.success("✅ Todos los evaluadores han recibido su invitación.")
+
+    # ── TAB: RESPUESTAS ──────────────────────────────────────
+    with tab_resp:
+        evaluados2 = queries.cc_listar_evaluados()
+        if not evaluados2:
+            st.info("No hay evaluados creados.")
+            return
+
+        ev_opts2  = {f"{e['nombre']} ({e.get('cargo','') or '—'})": e for e in evaluados2}
+        ev_lbl2   = st.selectbox("Evaluado", list(ev_opts2.keys()), key="cc_resp_ev_sel")
+        evaluado2 = ev_opts2[ev_lbl2]
+
+        respuestas = queries.cc_listar_respuestas(evaluado2["id"])
+        evs_total  = queries.cc_listar_evaluadores(evaluado2["id"])
+        completados = sum(1 for e in evs_total if e.get("completado"))
+
+        st.metric("Respuestas recibidas", f"{completados}/{len(evs_total)}")
+
+        if not respuestas:
+            st.info("Aún no hay respuestas para este evaluado.")
+            return
+
+        PREGUNTAS = [
+            ("continuar", "🟢 Continuar haciendo",
+             "¿Qué comportamientos o actitudes tiene este líder que consideras muy valiosos y debería seguir haciendo?"),
+            ("dejar",     "🔴 Dejar de hacer",
+             "¿Qué acciones o formas de comunicarse están generando \"ruido\", desmotivación o cuellos de botella?"),
+            ("empezar",   "🔵 Empezar a hacer",
+             f"¿Qué acción específica le recomendarías incorporar para mejorar su liderazgo en el área de {evaluado2.get('area') or 'su área'}?"),
+        ]
+
+        for campo, titulo, descripcion in PREGUNTAS:
+            st.subheader(titulo)
+            st.caption(descripcion)
+            for i, r in enumerate(respuestas, 1):
+                texto = r.get(campo) or ""
+                if texto.strip():
+                    st.markdown(f"> {texto}")
+            st.divider()
+
+
+# ============================================================
 # ROUTER
 # ============================================================
 
@@ -3519,3 +3657,5 @@ elif menu == "Seguimiento Feedback":
     pagina_seguimiento_feedback()
 elif menu == "Informe Final 360":
     pagina_informe_final()
+elif menu == "Cuestionario Complementario":
+    pagina_cuestionario_complementario()
