@@ -234,6 +234,68 @@ if _token:
                 st.rerun()
         st.stop()
 
+# ── Cuestionario Complementario (cc_token) ──────────────────
+_cc_token = st.query_params.get("cc_token")
+if _cc_token:
+    st.markdown("""
+    <style>
+        #MainMenu { visibility: hidden; }
+        footer    { visibility: hidden; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    _cc_ev = queries.cc_obtener_evaluador_por_token(_cc_token)
+    if not _cc_ev:
+        st.error("Token no válido o expirado.")
+        st.stop()
+
+    if _cc_ev.get("completado"):
+        st.success(f"¡Gracias, {_cc_ev['nombre']}! Ya enviaste tus respuestas.")
+        st.balloons()
+        st.stop()
+
+    _cc_evaluado = _cc_ev.get("cc_evaluados") or {}
+    _cc_nombre   = _cc_evaluado.get("nombre", "el evaluado")
+    _cc_area     = _cc_evaluado.get("area") or "su área"
+
+    st.title("Cuestionario Complementario")
+    st.markdown(
+        f"**Hola, {_cc_ev['nombre']}** — Estás respondiendo sobre **{_cc_nombre}**. "
+        "Tus respuestas son **anónimas**."
+    )
+    st.divider()
+
+    with st.form("form_cc_pub"):
+        st.markdown("### 🟢 Continuar haciendo")
+        st.caption("¿Qué comportamientos o actitudes tiene este líder en su comunicación y trato diario que consideras muy valiosos y debería seguir haciendo?")
+        _cc_continuar = st.text_area("Respuesta", height=130, key="cc_continuar", label_visibility="collapsed")
+
+        st.markdown("### 🔴 Dejar de hacer")
+        st.caption('¿Qué acciones o formas de comunicarse están generando "ruido", desmotivación o cuellos de botella en el equipo y debería detener?')
+        _cc_dejar = st.text_area("Respuesta", height=130, key="cc_dejar", label_visibility="collapsed")
+
+        st.markdown("### 🔵 Empezar a hacer")
+        st.caption(f"Pensando en los desafíos del área de {_cc_area}, ¿qué acción específica le recomendarías incorporar para mejorar su liderazgo, la forma en que reconoce al equipo o cómo entrega feedback?")
+        _cc_empezar = st.text_area("Respuesta", height=130, key="cc_empezar", label_visibility="collapsed")
+
+        st.divider()
+        _cc_enviado = st.form_submit_button("Enviar respuestas ✅", use_container_width=True)
+
+    if _cc_enviado:
+        if not _cc_continuar.strip() and not _cc_dejar.strip() and not _cc_empezar.strip():
+            st.error("Por favor responde al menos una pregunta antes de enviar.")
+        else:
+            queries.cc_guardar_respuestas(
+                _cc_ev["id"],
+                _cc_continuar.strip() or None,
+                _cc_dejar.strip()     or None,
+                _cc_empezar.strip()   or None,
+            )
+            st.success(f"¡Gracias, {_cc_ev['nombre']}! Tus respuestas fueron enviadas.")
+            st.balloons()
+            st.rerun()
+    st.stop()
+
 # ── Sin token → panel admin ─────────────────────────────────
 st.markdown(ADMIN_CSS, unsafe_allow_html=True)
 
