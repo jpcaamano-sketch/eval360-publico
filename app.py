@@ -15,6 +15,7 @@ from core.email_service import (
     enviar_invitacion_feedback,
     enviar_recordatorio_autoevaluacion,
     enviar_recordatorio_feedback,
+    enviar_invitacion_cc,
 )
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
@@ -3505,8 +3506,6 @@ def pagina_mantenedores():
 # ============================================================
 
 def pagina_cuestionario_complementario():
-    from core.email_service import enviar_invitacion_cc
-
     st.header("Cuestionario Complementario")
     st.caption("Feedback cualitativo de liderazgo — solo 3 preguntas abiertas, sin autoevaluación.")
 
