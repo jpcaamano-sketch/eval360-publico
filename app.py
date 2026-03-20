@@ -311,6 +311,7 @@ MENU_OPTIONS = [
     "Seguimiento Autoevaluaciones",
     "Seguimiento Feedback",
     "Informe Final 360",
+    "Plan Desarrollo Individual",
     "Cuestionario Complementario",
     "Ingresos Especiales",
 ]
@@ -3713,6 +3714,186 @@ def pagina_cuestionario_complementario():
 
 
 # ============================================================
+# PDI HELPERS
+# ============================================================
+
+def _generar_pdi_ia(nombre, top3):
+    """Genera el PDI con metodología 70-20-10 usando Gemini."""
+    def _fmt(v):
+        return f"{v:.1f}" if v is not None else "S/D"
+
+    datos_comp = ""
+    for i, comp in enumerate(top3, 1):
+        datos_comp += f"\n{i}. {comp['texto_feedback']}\n"
+        datos_comp += (
+            f"   Autoevaluación: {_fmt(comp['auto'])} | "
+            f"Feedback del entorno: {_fmt(comp['feedback'])} | "
+            f"Brecha: {_fmt(comp['diferencia'])}\n"
+        )
+
+    prompt = f"""Eres un coach experto en desarrollo de liderazgo y evaluaciones 360°.
+Genera un Plan de Desarrollo Individual (PDI) completo en español para {nombre}, utilizando la metodología 70-20-10.
+
+ESCALA DE EVALUACIÓN: 1 a 5 (1=Nunca, 2=Rara vez, 3=A veces, 4=Frecuentemente, 5=Siempre)
+UMBRAL DE CONSOLIDACIÓN: 3.5 — bajo ese valor la competencia requiere desarrollo activo.
+BRECHA: Feedback del entorno − Autoevaluación. Si es negativa, existe una sobreestimación propia (punto ciego).
+
+LAS 3 COMPETENCIAS CRÍTICAS A TRABAJAR:
+{datos_comp}
+
+INSTRUCCIONES:
+Genera un PDI estructurado con exactamente 3 secciones, una por cada competencia. Para cada una incluye:
+
+1. **El Quiebre**: Explica por qué esta competencia es prioritaria usando los datos numéricos proporcionados. Menciona la nota de feedback, la brecha respecto al umbral 3.5, y el impacto concreto en el liderazgo.
+
+2. **Meta de Desarrollo**: Define una meta específica y observable.
+
+3. **70% — Aprendizaje en Terreno**: 2 acciones concretas que {nombre} debe practicar en su día a día laboral. Sé específico con situaciones reales (reuniones, conversaciones, proyectos).
+
+4. **20% — Aprendizaje Social**: 1 acción que involucra aprendizaje con otros (pedir feedback, role-playing, mentoring, observación de referentes).
+
+5. **10% — Aprendizaje Formal**: 1 recurso concreto (lectura, taller, micro-learning, metodología específica).
+
+IMPORTANTE:
+- Usa los valores numéricos exactos proporcionados. NO inventes cifras.
+- Personaliza con el nombre {nombre} en las acciones concretas.
+- Tono: profesional, directo y constructivo.
+- Usa markdown: ## para titular cada competencia, **negrita** para los subtítulos 70/20/10.
+- Escribe en tercera persona."""
+
+    genai.configure(api_key=GOOGLE_API_KEY)
+    model = genai.GenerativeModel("gemini-2.5-flash")
+    response = model.generate_content(prompt)
+    _log_gemini("Evaluacion360", "gemini-2.5-flash", response, "PDI")
+    return response.text
+
+
+def pagina_pdi():
+    st.header("Plan de Desarrollo Individual")
+
+    if not GOOGLE_API_KEY:
+        st.warning("Falta configurar la API Key de Google AI.")
+        return
+
+    grupos = queries.listar_grupos()
+    if not grupos:
+        st.info("No hay grupos creados.")
+        return
+
+    col_emp, col_grp, col_part = st.columns(3)
+
+    empresas = sorted({g.get("empresa") or "—" for g in grupos})
+    empresa_sel = col_emp.selectbox("Empresa", options=empresas, key="pdi_empresa")
+
+    grupos_filtrados = [g for g in grupos if (g.get("empresa") or "—") == empresa_sel]
+    grupo_sel = col_grp.selectbox(
+        "Programa", options=grupos_filtrados,
+        format_func=lambda g: g["nombre"], key="pdi_grupo",
+    )
+    if not grupo_sel:
+        return
+
+    participantes = queries.listar_participantes(grupo_sel["id"])
+    participantes_completos = sorted(
+        [p for p in participantes if p["autoevaluacion_completada"]],
+        key=lambda p: (p.get("pers_apellidos") or p.get("nombre") or "").lower(),
+    )
+    if not participantes_completos:
+        col_part.markdown("&nbsp;")
+        st.info("No hay participantes con autoevaluación completada en este grupo.")
+        return
+
+    part_sel = col_part.selectbox(
+        "Nombre",
+        options=participantes_completos,
+        format_func=lambda p: p["nombre"],
+        key="pdi_part",
+    )
+    if not part_sel:
+        return
+
+    if st.session_state.get("_pdi_part_anterior") != part_sel["id"]:
+        st.session_state.pop("pdi_360", None)
+        st.session_state["_pdi_part_anterior"] = part_sel["id"]
+
+    grupo_info = queries.obtener_grupo(grupo_sel["id"])
+    plantilla_id = grupo_info["plantilla_id"] if grupo_info else None
+    if not plantilla_id:
+        st.error("No se encontró la plantilla del grupo.")
+        return
+
+    evaluadores = queries.listar_evaluadores(part_sel["id"])
+    completados = [e for e in evaluadores if e["completado"]]
+    if not completados:
+        st.warning("Ningún evaluador ha completado el feedback aún.")
+        return
+
+    st.divider()
+
+    resultados_cat, resultados_comp = _calcular_puntajes_360(part_sel["id"], plantilla_id)
+
+    # Seleccionar las 3 competencias más críticas
+    # Criterio: menor puntaje de feedback; en caso de empate, brecha más negativa (punto ciego)
+    comp_con_fb  = [c for c in resultados_comp if c["feedback"] is not None]
+    comp_sin_fb  = [c for c in resultados_comp if c["feedback"] is None and c["auto"] is not None]
+    comp_con_fb  = sorted(comp_con_fb, key=lambda c: (c["feedback"], c["diferencia"] or 0))
+    comp_sin_fb  = sorted(comp_sin_fb, key=lambda c: c["auto"])
+    top3 = (comp_con_fb + comp_sin_fb)[:3]
+
+    if len(top3) < 1:
+        st.info("No hay suficientes datos para generar el PDI.")
+        return
+
+    st.subheader("3 Competencias Críticas identificadas")
+    st.caption("Seleccionadas por menor puntaje de feedback y mayor brecha negativa")
+
+    hdr = st.columns([4, 1.2, 1.2, 1.2])
+    hdr[0].markdown("**Competencia**")
+    hdr[1].markdown("**Auto**")
+    hdr[2].markdown("**Feedback**")
+    hdr[3].markdown("**Brecha**")
+    st.markdown("---")
+
+    for i, comp in enumerate(top3, 1):
+        row = st.columns([4, 1.2, 1.2, 1.2])
+        row[0].markdown(f"**{i}. {comp['texto_feedback']}**")
+        row[1].caption(f"{comp['auto']:.1f}" if comp["auto"] is not None else "—")
+        fb_str = f"{comp['feedback']:.1f}" if comp["feedback"] is not None else "—"
+        if comp["feedback"] is not None and comp["feedback"] < UMBRAL_MEJORAR:
+            row[2].markdown(f"**:red[{fb_str}]**")
+        else:
+            row[2].caption(fb_str)
+        diff_str = f"{comp['diferencia']:.1f}" if comp["diferencia"] is not None else "—"
+        if comp["diferencia"] is not None and comp["diferencia"] < 0:
+            row[3].markdown(f"**:red[{diff_str}]**")
+        else:
+            row[3].caption(diff_str)
+
+    st.divider()
+
+    if st.button("Generar Plan de Desarrollo Individual", type="primary", use_container_width=True):
+        with st.spinner("Generando PDI con IA... (esto puede demorar unos segundos)"):
+            try:
+                texto_pdi = _generar_pdi_ia(part_sel["nombre"], top3)
+                st.session_state["pdi_360"] = {
+                    "texto":       texto_pdi,
+                    "nombre":      part_sel["nombre"],
+                    "competencias": top3,
+                }
+            except Exception as e:
+                st.error(f"Error al generar PDI: {e}")
+                return
+
+    if "pdi_360" not in st.session_state:
+        return
+
+    pdi = st.session_state["pdi_360"]
+    st.divider()
+    st.markdown(f"## Plan de Desarrollo Individual — {pdi['nombre']}")
+    st.markdown(pdi["texto"])
+
+
+# ============================================================
 # ROUTER
 # ============================================================
 
@@ -3732,5 +3913,7 @@ elif menu == "Seguimiento Feedback":
     pagina_seguimiento_feedback()
 elif menu == "Informe Final 360":
     pagina_informe_final()
+elif menu == "Plan Desarrollo Individual":
+    pagina_pdi()
 elif menu == "Cuestionario Complementario":
     pagina_cuestionario_complementario()
