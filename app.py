@@ -3655,8 +3655,22 @@ def pagina_cuestionario_complementario():
                             err += 1
                     st.success(f"✅ {ok} invitaciones enviadas." + (f" ⚠️ {err} errores." if err else ""))
                     st.rerun()
-            else:
-                st.success("✅ Todos los evaluadores han recibido su invitación.")
+
+            sin_responder = [e for e in evaluadores if e.get("invitacion_enviada") and not e.get("completado")]
+            if sin_responder:
+                if st.button(f"🔔 Reenviar recordatorio ({len(sin_responder)} sin responder)", key="cc_reenviar_rec"):
+                    ok = err = 0
+                    for e in sin_responder:
+                        try:
+                            enviar_invitacion_cc(e, evaluado["nombre"])
+                            ok += 1
+                        except Exception as ex:
+                            st.warning(f"Error enviando a {e['nombre']}: {ex}")
+                            err += 1
+                    st.success(f"✅ {ok} recordatorios enviados." + (f" ⚠️ {err} errores." if err else ""))
+
+            if not pendientes and not sin_responder:
+                st.success("✅ Todos los evaluadores han completado el cuestionario.")
 
     # ── TAB: RESPUESTAS ──────────────────────────────────────
     with tab_resp:
