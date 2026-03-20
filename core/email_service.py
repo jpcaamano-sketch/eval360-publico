@@ -143,7 +143,7 @@ def enviar_recordatorio_feedback(evaluador, participante_nombre):
 def enviar_invitacion_cc(evaluador, evaluado_nombre):
     """Envía invitación del Cuestionario Complementario a un evaluador."""
     from core.config import APP_CC_URL
-    link = f"{APP_CC_URL}/?token={evaluador['token']}"
+    link = f"{APP_CC_URL}/?cc_token={evaluador['token']}"
     asunto = f"Cuestionario Complementario — Feedback para {evaluado_nombre}"
     cuerpo = f"""
     <html>
