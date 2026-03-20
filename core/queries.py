@@ -529,3 +529,80 @@ def eliminar_respuestas_feedback(participante_id, evaluador_id):
     return sb.table("v2_respuestas").delete().eq(
         "participante_id", participante_id
     ).eq("evaluador_id", evaluador_id).execute()
+
+
+# ============================================================
+# CUESTIONARIO COMPLEMENTARIO (cc_)
+# ============================================================
+
+@con_reintento
+def cc_listar_evaluados():
+    sb = get_client()
+    return sb.table("cc_evaluados").select("*").order("created_at", desc=True).execute().data
+
+@con_reintento
+def cc_crear_evaluado(nombre, cargo, area):
+    sb = get_client()
+    return sb.table("cc_evaluados").insert({"nombre": nombre, "cargo": cargo, "area": area}).execute().data[0]
+
+@con_reintento
+def cc_eliminar_evaluado(evaluado_id):
+    sb = get_client()
+    sb.table("cc_evaluados").delete().eq("id", evaluado_id).execute()
+
+@con_reintento
+def cc_listar_evaluadores(evaluado_id):
+    sb = get_client()
+    return sb.table("cc_evaluadores").select("*, cc_respuestas(id)").eq("evaluado_id", evaluado_id).order("created_at").execute().data
+
+@con_reintento
+def cc_crear_evaluador(evaluado_id, nombre, correo):
+    sb = get_client()
+    return sb.table("cc_evaluadores").insert({"evaluado_id": evaluado_id, "nombre": nombre, "correo": correo}).execute().data[0]
+
+@con_reintento
+def cc_eliminar_evaluador(evaluador_id):
+    sb = get_client()
+    sb.table("cc_evaluadores").delete().eq("id", evaluador_id).execute()
+
+@con_reintento
+def cc_obtener_evaluador_por_token(token):
+    sb = get_client()
+    r = sb.table("cc_evaluadores").select("*, cc_evaluados(id, nombre, cargo, area)").eq("token", token).execute()
+    return r.data[0] if r.data else None
+
+@con_reintento
+def cc_guardar_respuestas(evaluador_id, continuar, dejar, empezar):
+    sb = get_client()
+    sb.table("cc_respuestas").upsert({
+        "evaluador_id": evaluador_id,
+        "resp_continuar": continuar,
+        "resp_dejar":     dejar,
+        "resp_empezar":   empezar,
+    }, on_conflict="evaluador_id").execute()
+    sb.table("cc_evaluadores").update({"completado": True}).eq("id", evaluador_id).execute()
+
+@con_reintento
+def cc_marcar_invitacion_enviada(evaluador_id):
+    sb = get_client()
+    sb.table("cc_evaluadores").update({"invitacion_enviada": True}).eq("id", evaluador_id).execute()
+
+@con_reintento
+def cc_listar_respuestas(evaluado_id):
+    sb = get_client()
+    evs = sb.table("cc_evaluadores").select("id, nombre, completado").eq("evaluado_id", evaluado_id).eq("completado", True).execute().data
+    if not evs:
+        return []
+    ids = [e["id"] for e in evs]
+    resps = sb.table("cc_respuestas").select("*").in_("evaluador_id", ids).execute().data
+    resp_map = {r["evaluador_id"]: r for r in resps}
+    result = []
+    for ev in evs:
+        r = resp_map.get(ev["id"], {})
+        result.append({
+            "evaluador": ev["nombre"],
+            "continuar": r.get("resp_continuar", ""),
+            "dejar":     r.get("resp_dejar", ""),
+            "empezar":   r.get("resp_empezar", ""),
+        })
+    return result
