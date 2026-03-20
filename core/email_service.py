@@ -138,3 +138,34 @@ def enviar_recordatorio_feedback(evaluador, participante_nombre):
     </html>
     """
     _enviar_email(evaluador["email"], asunto, cuerpo)
+
+
+def enviar_invitacion_cc(evaluador, evaluado_nombre):
+    """Envía invitación del Cuestionario Complementario a un evaluador."""
+    from core.config import APP_CC_URL
+    link = f"{APP_CC_URL}/?token={evaluador['token']}"
+    asunto = f"Cuestionario Complementario — Feedback para {evaluado_nombre}"
+    cuerpo = f"""
+    <html>
+    <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background-color: #1a1a2e; color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0;">
+            <h1 style="margin: 0;">Cuestionario Complementario</h1>
+        </div>
+        <div style="padding: 30px; background-color: #f8f9fa; border-radius: 0 0 10px 10px;">
+            <p>Hola <strong>{evaluador['nombre']}</strong>,</p>
+            <p>Has sido invitado/a a responder un cuestionario sobre el liderazgo de <strong>{evaluado_nombre}</strong>.</p>
+            <p>Son solo 3 preguntas abiertas. Tu respuesta es <strong>anónima</strong> y muy valiosa.</p>
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{link}"
+                   style="background-color: #7c3aed; color: white; padding: 15px 30px;
+                          text-decoration: none; border-radius: 8px; font-size: 16px;">
+                    Responder Cuestionario
+                </a>
+            </div>
+            <p style="color: #666; font-size: 12px;">Si el botón no funciona, copia y pega este enlace:<br>
+            <a href="{link}">{link}</a></p>
+        </div>
+    </body>
+    </html>
+    """
+    _enviar_email(evaluador["correo"], asunto, cuerpo)
