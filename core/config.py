@@ -23,7 +23,7 @@ GOOGLE_API_KEY = _cfg("GOOGLE_API_KEY", "")
 # URLs de las aplicaciones (Streamlit Cloud — URL permanente)
 APP_AUTO_URL      = "https://eval360-yocreo.streamlit.app"
 APP_FEEDBACK_URL  = "https://eval360-yocreo.streamlit.app"
-APP_CC_URL        = _cfg("APP_CC_URL", "https://eval360-cc.streamlit.app")
+APP_CC_URL        = _cfg("APP_CC_URL", "https://eval360-yocreo.streamlit.app")
 
 # Escala de evaluación
 ESCALA = {
