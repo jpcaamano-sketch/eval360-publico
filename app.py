@@ -3717,6 +3717,71 @@ def pagina_cuestionario_complementario():
 # PDI HELPERS
 # ============================================================
 
+def _generar_word_pdi(nombre, top3, texto_pdi):
+    """Convierte el PDI generado por IA a documento Word."""
+    import re
+    doc = Document()
+
+    # Título
+    titulo = doc.add_heading("PLAN DE DESARROLLO INDIVIDUAL", level=0)
+    titulo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    doc.add_paragraph(f"Participante: {nombre}")
+    doc.add_paragraph(f"Fecha: {datetime.now(timezone.utc).strftime('%d/%m/%Y')}")
+    doc.add_paragraph(f"Metodología: 70-20-10 (Experiencia · Exposición · Educación)")
+
+    doc.add_heading("Competencias Críticas Identificadas", level=1)
+    tbl = doc.add_table(rows=1, cols=4)
+    tbl.style = "Table Grid"
+    hdrs = ["Competencia", "Autoevaluación", "Feedback", "Brecha"]
+    for i, h in enumerate(hdrs):
+        cell = tbl.rows[0].cells[i]
+        cell.text = h
+        for run in cell.paragraphs[0].runs:
+            run.font.bold = True
+            run.font.size = Pt(9)
+    for comp in top3:
+        row = tbl.add_row()
+        row.cells[0].text = comp["texto_feedback"]
+        row.cells[1].text = _f1(comp["auto"])
+        row.cells[2].text = _f1(comp["feedback"])
+        row.cells[3].text = _f1(comp["diferencia"])
+        for cell in row.cells:
+            for run in cell.paragraphs[0].runs:
+                run.font.size = Pt(9)
+
+    doc.add_paragraph("")
+    doc.add_heading("Plan de Desarrollo", level=1)
+
+    # Parsear el texto markdown de Gemini línea por línea
+    for line in texto_pdi.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            doc.add_paragraph("")
+            continue
+        if stripped.startswith("### "):
+            doc.add_heading(stripped[4:], level=3)
+        elif stripped.startswith("## "):
+            doc.add_heading(stripped[3:], level=2)
+        elif stripped.startswith("# "):
+            doc.add_heading(stripped[2:], level=1)
+        else:
+            # Parsear negrita **texto** dentro de la línea
+            p = doc.add_paragraph()
+            parts = re.split(r"\*\*(.+?)\*\*", stripped)
+            for idx, part in enumerate(parts):
+                if idx % 2 == 1:  # dentro de **...**
+                    run = p.add_run(part)
+                    run.bold = True
+                else:
+                    # Limpiar asteriscos simples residuales
+                    p.add_run(part.replace("*", ""))
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    return buf
+
+
 def _generar_pdi_ia(nombre, top3):
     """Genera el PDI con metodología 70-20-10 usando Gemini."""
     def _fmt(v):
@@ -3891,6 +3956,17 @@ def pagina_pdi():
     st.divider()
     st.markdown(f"## Plan de Desarrollo Individual — {pdi['nombre']}")
     st.markdown(pdi["texto"])
+
+    st.divider()
+    buf_word = _generar_word_pdi(pdi["nombre"], pdi["competencias"], pdi["texto"])
+    nombre_archivo = f"PDI_{pdi['nombre'].replace(' ', '_')}.docx"
+    st.download_button(
+        "Descargar PDI en Word",
+        data=buf_word,
+        file_name=nombre_archivo,
+        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        use_container_width=True,
+    )
 
 
 # ============================================================
