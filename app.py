@@ -534,10 +534,14 @@ def _editar_plantilla(plantilla_id):
                         "categoria_id": nueva_cat_comp["id"],
                     })
                     st.session_state["editando_comp"] = None
+                    st.session_state.pop(f"eauto_{comp['id']}", None)
+                    st.session_state.pop(f"efeed_{comp['id']}", None)
                     st.rerun()
             # Botón cancelar fuera del form
             if st.button("Cancelar", key=f"cancel_{comp['id']}"):
                 st.session_state["editando_comp"] = None
+                st.session_state.pop(f"eauto_{comp['id']}", None)
+                st.session_state.pop(f"efeed_{comp['id']}", None)
                 st.rerun()
         else:
             r1, r2, r3, r4, r5 = st.columns([1.5, 2.5, 2.5, 0.5, 0.5])
