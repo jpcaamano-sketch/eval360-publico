@@ -2477,58 +2477,63 @@ def _contenido_importar_encuesta_csv():
 
     st.divider()
 
-    # ---- Generar versión feedback con IA ----
-    st.markdown("#### Generar versión feedback (3ª persona singular)")
+    # ---- Generar versiones con IA ----
+    st.markdown("#### Generar versiones con IA (1ª y 3ª persona)")
     st.caption(
-        "La IA convertirá cada competencia de primera persona a tercera persona singular. "
-        "Podrás revisar y editar el resultado antes de guardar."
+        "La IA normalizará cada competencia a 1ª persona (autoevaluación) y 3ª persona (feedback), "
+        "sin importar cómo estén escritas en el CSV. Podrás revisar antes de guardar."
     )
 
-    if st.button("🤖 Generar versión feedback con IA", use_container_width=True, type="primary"):
+    if st.button("🤖 Generar versiones con IA", use_container_width=True, type="primary"):
         lista_numerada = "\n".join(
             f"{i+1}. {row[col_comp]}"
             for i, (_, row) in enumerate(df_v.iterrows())
         )
         prompt = (
             "Eres un experto en evaluaciones de desempeño 360°.\n"
-            "Tienes una lista de afirmaciones escritas en PRIMERA PERSONA SINGULAR "
-            "(autoevaluación). Conviértelas a TERCERA PERSONA SINGULAR para su uso "
-            "como preguntas de feedback de evaluadores hacia el evaluado.\n\n"
+            "Recibirás una lista de competencias escritas en cualquier persona gramatical.\n"
+            "Para CADA competencia debes generar DOS versiones:\n"
+            "  A) PRIMERA PERSONA SINGULAR — para autoevaluación (el evaluado habla de sí mismo)\n"
+            "  B) TERCERA PERSONA SINGULAR — para feedback de evaluadores (sin nombre propio, "
+            "usa 'el/la evaluado/a' o frases impersonales)\n\n"
             "Reglas estrictas:\n"
             "- Mantén el mismo significado y nivel de detalle\n"
-            "- Solo cambia la persona gramatical (yo → él/ella)\n"
-            "- No agregues el nombre del sujeto, usa frases impersonales o 'el/la evaluado/a'\n"
-            "- Devuelve SOLO la lista numerada con las frases convertidas, sin explicaciones ni encabezados\n"
-            "- Un ítem por línea, en el mismo orden\n\n"
+            "- Devuelve SOLO la lista numerada, un ítem por línea, en el mismo orden\n"
+            "- Formato exacto de cada línea: N. [primera persona] | [tercera persona]\n"
+            "- Sin explicaciones, sin encabezados, sin líneas en blanco entre ítems\n\n"
             f"Lista ({len(df_v)} ítems):\n{lista_numerada}"
         )
-        with st.spinner("Generando versión feedback..."):
+        with st.spinner("Generando versiones con IA..."):
             try:
+                import re
                 genai.configure(api_key=GOOGLE_API_KEY)
                 model = genai.GenerativeModel("gemini-2.5-flash")
                 respuesta = model.generate_content(prompt)
-                _log_gemini("Evaluacion360", "gemini-2.5-flash", respuesta, "Conversión texto feedback")
+                _log_gemini("Evaluacion360", "gemini-2.5-flash", respuesta, "Conversión auto+feedback")
                 lineas = [
                     l.strip()
                     for l in respuesta.text.strip().split("\n")
                     if l.strip()
                 ]
-                # Quitar numeración si la IA la incluyó
-                import re
-                feedback_textos = [
-                    re.sub(r'^\d+[\.\)]\s*', '', l).strip()
-                    for l in lineas
-                    if l.strip()
-                ]
-                if len(feedback_textos) == len(df_v):
+                # Quitar numeración y separar por "|"
+                auto_textos = []
+                feedback_textos = []
+                for l in lineas:
+                    l_clean = re.sub(r'^\d+[\.\)]\s*', '', l).strip()
+                    if "|" in l_clean:
+                        partes = l_clean.split("|", 1)
+                        auto_textos.append(partes[0].strip())
+                        feedback_textos.append(partes[1].strip())
+                if len(auto_textos) == len(df_v) and len(feedback_textos) == len(df_v):
+                    st.session_state["imp360_autos"]    = auto_textos
                     st.session_state["imp360_feedback"] = feedback_textos
-                    st.session_state["imp360_df"] = df_v.reset_index(drop=True)
-                    st.session_state["imp360_col_amb"] = col_amb
+                    st.session_state["imp360_df"]       = df_v.reset_index(drop=True)
+                    st.session_state["imp360_col_amb"]  = col_amb
                     st.session_state["imp360_col_comp"] = col_comp
                 else:
                     st.warning(
-                        f"La IA devolvió {len(feedback_textos)} frases pero se esperaban {len(df_v)}. "
-                        "Intenta de nuevo o ajusta el CSV."
+                        f"La IA devolvió {len(auto_textos)} ítems pero se esperaban {len(df_v)}. "
+                        "Intenta de nuevo."
                     )
             except Exception as e:
                 st.error(f"Error al contactar la IA: {e}")
@@ -2536,17 +2541,22 @@ def _contenido_importar_encuesta_csv():
     # ---- Revisión y edición del resultado ----
     if (
         "imp360_feedback" in st.session_state
+        and "imp360_autos" in st.session_state
         and "imp360_df" in st.session_state
         and len(st.session_state["imp360_feedback"]) == len(st.session_state["imp360_df"])
+        and len(st.session_state["imp360_autos"]) == len(st.session_state["imp360_df"])
     ):
         df_imp   = st.session_state["imp360_df"]
         col_amb_ = st.session_state["imp360_col_amb"]
-        col_comp_= st.session_state["imp360_col_comp"]
         feedbacks= st.session_state["imp360_feedback"]
+        autos    = st.session_state["imp360_autos"]
 
         st.divider()
         st.markdown("#### Revisión — Autoevaluación vs Feedback")
-        st.caption("Puedes editar los textos de feedback antes de guardar.")
+        st.caption("Puedes editar ambos textos antes de guardar.")
+        hc1, hc2 = st.columns(2)
+        hc1.markdown("**✏️ Autoevaluación (1ª persona)**")
+        hc2.markdown("**✏️ Feedback (3ª persona)**")
 
         feedbacks_editados = []
         for amb in list(dict.fromkeys(df_imp[col_amb_].tolist())):
@@ -2557,16 +2567,16 @@ def _contenido_importar_encuesta_csv():
             )
             indices = df_imp[df_imp[col_amb_] == amb].index.tolist()
             for idx in indices:
-                texto_auto = df_imp.loc[idx, col_comp_]
+                auto_orig = autos[idx]
                 texto_fb_orig = feedbacks[idx]
                 c1, c2 = st.columns(2)
                 with c1:
-                    st.markdown(
-                        f"<div style='background:#f0f4f8;border-radius:5px;padding:8px 10px;"
-                        f"font-size:0.88rem;color:#333'>"
-                        f"<span style='color:#666;font-size:0.75rem'>AUTOEVALUACIÓN (1ª persona)</span><br>"
-                        f"{texto_auto}</div>",
-                        unsafe_allow_html=True,
+                    auto_edit = st.text_area(
+                        "Autoevaluación (1ª persona)",
+                        value=auto_orig,
+                        key=f"auto_edit_{idx}",
+                        height=80,
+                        label_visibility="collapsed",
                     )
                 with c2:
                     texto_fb_edit = st.text_area(
@@ -2576,7 +2586,7 @@ def _contenido_importar_encuesta_csv():
                         height=80,
                         label_visibility="collapsed",
                     )
-                feedbacks_editados.append((amb, texto_auto, texto_fb_edit))
+                feedbacks_editados.append((amb, auto_edit, texto_fb_edit))
 
         st.divider()
 
@@ -2620,7 +2630,7 @@ def _contenido_importar_encuesta_csv():
                         f"**{n_cats} categoría(s)** y **{n_comps} competencia(s)**."
                     )
                     # Limpiar estado
-                    for k in ["imp360_feedback", "imp360_df", "imp360_col_amb", "imp360_col_comp"]:
+                    for k in ["imp360_feedback", "imp360_autos", "imp360_df", "imp360_col_amb", "imp360_col_comp"]:
                         st.session_state.pop(k, None)
                     st.balloons()
                 except Exception as e:
