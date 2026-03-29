@@ -534,14 +534,14 @@ def _editar_plantilla(plantilla_id):
                         "categoria_id": nueva_cat_comp["id"],
                     })
                     st.session_state["editando_comp"] = None
-                    st.session_state.pop(f"eauto_{comp['id']}", None)
-                    st.session_state.pop(f"efeed_{comp['id']}", None)
+                    for _k in [f"eauto_{comp['id']}", f"efeed_{comp['id']}", f"ecat_{comp['id']}"]:
+                        st.session_state.pop(_k, None)
                     st.rerun()
             # Botón cancelar fuera del form
             if st.button("Cancelar", key=f"cancel_{comp['id']}"):
                 st.session_state["editando_comp"] = None
-                st.session_state.pop(f"eauto_{comp['id']}", None)
-                st.session_state.pop(f"efeed_{comp['id']}", None)
+                for _k in [f"eauto_{comp['id']}", f"efeed_{comp['id']}", f"ecat_{comp['id']}"]:
+                    st.session_state.pop(_k, None)
                 st.rerun()
         else:
             r1, r2, r3, r4, r5 = st.columns([1.5, 2.5, 2.5, 0.5, 0.5])
@@ -2528,6 +2528,10 @@ def _contenido_importar_encuesta_csv():
                         auto_textos.append(partes[0].strip())
                         feedback_textos.append(partes[1].strip())
                 if len(auto_textos) == len(df_v) and len(feedback_textos) == len(df_v):
+                    # Limpiar keys de widgets anteriores para que carguen valores frescos
+                    for _k in list(st.session_state.keys()):
+                        if _k.startswith("auto_edit_") or _k.startswith("fb_edit_"):
+                            del st.session_state[_k]
                     st.session_state["imp360_autos"]    = auto_textos
                     st.session_state["imp360_feedback"] = feedback_textos
                     st.session_state["imp360_df"]       = df_v.reset_index(drop=True)
@@ -2635,6 +2639,9 @@ def _contenido_importar_encuesta_csv():
                     # Limpiar estado
                     for k in ["imp360_feedback", "imp360_autos", "imp360_df", "imp360_col_amb", "imp360_col_comp"]:
                         st.session_state.pop(k, None)
+                    for _k in list(st.session_state.keys()):
+                        if _k.startswith("auto_edit_") or _k.startswith("fb_edit_"):
+                            del st.session_state[_k]
                     st.balloons()
                 except Exception as e:
                     st.error(f"Error al guardar: {e}")
