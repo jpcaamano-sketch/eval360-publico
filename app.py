@@ -106,10 +106,10 @@ if _token:
 
         st.divider()
         st.subheader("Evaluadores")
-        st.markdown("Ingresa entre **3 y 5** personas que te evaluarán. Deben ser colegas, supervisores o colaboradores que te conozcan bien.")
+        st.markdown("Ingresa entre **5 y 8** personas que te evaluarán. Deben ser colegas, supervisores o colaboradores que te conozcan bien.")
         _evaluadores_data = []
-        for _i in range(5):
-            _obl = " *(obligatorio)*" if _i < 3 else " *(opcional)*"
+        for _i in range(8):
+            _obl = " *(obligatorio)*" if _i < 5 else " *(opcional)*"
             st.markdown(f"**Evaluador {_i + 1}**{_obl}")
             _c1, _c2 = st.columns(2)
             with _c1:
@@ -124,8 +124,8 @@ if _token:
             _errores = []
             if not _todas_respondidas or len(_respuestas) < len(_competencias):
                 _errores.append("Debes responder todas las competencias.")
-            if len(_evaluadores_data) < 3:
-                _errores.append("¡¡Falta nombres de colaboradores!! Debes ingresar al menos 3 evaluadores.")
+            if len(_evaluadores_data) < 5:
+                _errores.append("¡¡Falta nombres de colaboradores!! Debes ingresar al menos 5 evaluadores.")
             if _errores:
                 for _e in _errores: st.error(_e)
             else:
@@ -371,17 +371,14 @@ def pagina_inicio():
 
     plantillas = queries.listar_plantillas()
     grupos = queries.listar_grupos()
+    part_counts = queries.contar_participantes_por_grupo()
 
     with col1:
         st.metric("Plantillas", len(plantillas))
     with col2:
         st.metric("Grupos", len(grupos))
     with col3:
-        total_part = 0
-        for g in grupos:
-            parts = queries.listar_participantes(g["id"])
-            total_part += len(parts)
-        st.metric("Participantes", total_part)
+        st.metric("Participantes", sum(part_counts.values()))
 
     st.divider()
     st.subheader("Flujo del proceso")
@@ -731,10 +728,11 @@ def pagina_grupos():
             st.info("No hay grupos. Crea uno en la pestaña 'Crear nuevo grupo'.")
             return
 
+        part_counts = queries.contar_participantes_por_grupo()
         rows_orig = []
         for i, g in enumerate(grupos, 1):
             plantilla_nombre = g.get("v2_plantillas", {}).get("nombre", "—") if g.get("v2_plantillas") else "—"
-            n_parts = len(queries.listar_participantes(g["id"]))
+            n_parts = part_counts.get(g["id"], 0)
             rows_orig.append({
                 "✓": False,
                 "#": i,
@@ -1047,13 +1045,13 @@ def pagina_seguimiento_auto():
         st.info("No hay grupos creados.")
         return
 
-    # Recopilar todos los participantes de todos los grupos
+    # Cargar todos los participantes en 2 queries fijas (en lugar de 1+N)
+    grupo_map = {g["id"]: g["nombre"] for g in grupos}
+    todos_part = queries.listar_todos_participantes_bulk()
     filas = []
-    for g in grupos:
-        participantes = queries.listar_participantes(g["id"])
-        for p in participantes:
-            p["_grupo_nombre"] = g["nombre"]
-            filas.append(p)
+    for p in todos_part:
+        p["_grupo_nombre"] = grupo_map.get(p.get("grupo_id"), "—")
+        filas.append(p)
 
     if not filas:
         st.info("No hay participantes en ningún grupo.")
@@ -1293,12 +1291,13 @@ def pagina_seguimiento_feedback():
         st.info("No hay evaluadores registrados aún (o ningún participante completó su autoevaluación).")
         return
 
-    # Filtros: Empresa → Grupo
-    grupos = queries.listar_grupos()
+    # Filtros: Empresa → Grupo (construido desde todos_ev, sin query adicional)
     empresa_a_grupos = {}
-    for g in grupos:
-        emp = g.get("empresa") or "—"
-        empresa_a_grupos.setdefault(emp, []).append(g["nombre"])
+    for ev in todos_ev:
+        emp = ev.get("empresa_nombre") or "—"
+        gname = ev.get("grupo_nombre") or "—"
+        if gname not in empresa_a_grupos.get(emp, []):
+            empresa_a_grupos.setdefault(emp, []).append(gname)
 
     col_emp, col_grp = st.columns([1, 1])
     with col_emp:

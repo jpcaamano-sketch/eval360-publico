@@ -145,16 +145,22 @@ def listar_competencias_por_plantilla(plantilla_id):
 
     Orden: primero por comp.orden (ronda 1, 2, 3...), luego por cat.orden (categoria 1, 2...).
     Resultado: Cat1-R1, Cat2-R1, Cat3-R1, ..., Cat1-R2, Cat2-R2, ... (intercalado entre categorías).
+    2 queries fijas en lugar de 1+N.
     """
-    categorias = listar_categorias(plantilla_id)
-    resultado = []
-    for cat in categorias:
-        comps = listar_competencias(cat["id"])
-        for comp in comps:
-            comp["categoria_nombre"] = cat["nombre"]
-            comp["_cat_orden"] = cat.get("orden", 0)
-        resultado.extend(comps)
-    return sorted(resultado, key=lambda c: (c.get("orden", 0), c.get("_cat_orden", 0), c.get("id", "")))
+    sb = get_client()
+    cats_res = sb.table("v2_categorias").select("*").eq("plantilla_id", plantilla_id).order("orden").execute()
+    categorias = cats_res.data or []
+    if not categorias:
+        return []
+    cat_ids = [c["id"] for c in categorias]
+    cat_map = {c["id"]: c for c in categorias}
+    comps_res = sb.table("v2_competencias").select("*").in_("categoria_id", cat_ids).order("orden").execute()
+    comps = comps_res.data or []
+    for comp in comps:
+        cat = cat_map.get(comp["categoria_id"], {})
+        comp["categoria_nombre"] = cat.get("nombre", "")
+        comp["_cat_orden"] = cat.get("orden", 0)
+    return sorted(comps, key=lambda c: (c.get("orden", 0), c.get("_cat_orden", 0), c.get("id", "")))
 
 
 @con_reintento
@@ -348,17 +354,17 @@ def listar_participantes(grupo_id):
 
 @con_reintento
 def obtener_participante_por_token(token):
-    """Obtiene un participante por su token de autoevaluación, con datos del grupo y sist_personas."""
+    """Obtiene un participante por su token de autoevaluación, con datos del grupo y sist_personas.
+    1 query con joins embebidos en lugar de 2 queries en cadena.
+    """
     sb = get_client()
     res = sb.table("v2_participantes").select(
-        "*, sist_personas(pers_nombres, pers_apellidos, pers_correo)"
+        "*, sist_personas(pers_nombres, pers_apellidos, pers_correo), v2_grupos(*)"
     ).eq("token_auto", token).execute()
     if not res.data:
         return None
     participante = _enriquecer_participante(res.data[0])
-    grupo_res = sb.table("v2_grupos").select("*").eq("id", participante["grupo_id"]).execute()
-    if grupo_res.data:
-        participante["v2_grupos"] = grupo_res.data[0]
+    # v2_grupos queda embebido en el resultado; _enriquecer_participante no lo toca
     return participante
 
 
@@ -400,8 +406,30 @@ def listar_evaluadores(participante_id):
 
 
 @con_reintento
+def contar_participantes_por_grupo():
+    """Devuelve {grupo_id: count} en una sola query (solo fetches grupo_id)."""
+    sb = get_client()
+    res = sb.table("v2_participantes").select("grupo_id").execute()
+    counts = {}
+    for p in (res.data or []):
+        gid = p["grupo_id"]
+        counts[gid] = counts.get(gid, 0) + 1
+    return counts
+
+
+@con_reintento
+def listar_todos_participantes_bulk():
+    """Devuelve todos los participantes enriquecidos en 2 queries."""
+    sb = get_client()
+    res = sb.table("v2_participantes").select(
+        "*, sist_personas(pers_nombres, pers_apellidos, pers_correo)"
+    ).execute()
+    return [_enriquecer_participante(p) for p in (res.data or [])]
+
+
+@con_reintento
 def listar_todos_evaluadores_bulk():
-    """Devuelve todos los evaluadores con datos de participante y grupo en 3 queries."""
+    """Devuelve todos los evaluadores con datos de participante, grupo y empresa en 4 queries."""
     sb = get_client()
     # 1. Todos los evaluadores
     evs_res = sb.table("v2_evaluadores").select("*").order("created_at").execute()
@@ -416,6 +444,9 @@ def listar_todos_evaluadores_bulk():
     # 3. Todos los grupos
     grps_res = sb.table("v2_grupos").select("id, nombre, rut_empresa").execute()
     grupo_map = {g["id"]: g for g in (grps_res.data or [])}
+    # 4. Todas las empresas
+    emp_res = sb.table("otec_empresas").select("rut_empresa, nombre_empresa").execute()
+    empresa_map = {e["rut_empresa"]: e["nombre_empresa"] for e in (emp_res.data or [])}
     # Enriquecer evaluadores
     for ev in evaluadores:
         p = partic_map.get(ev["participante_id"], {})
@@ -424,43 +455,50 @@ def listar_todos_evaluadores_bulk():
         ev["autoevaluacion_completada"] = p.get("autoevaluacion_completada", False)
         ev["participante_obj"]    = p
         g = grupo_map.get(p.get("grupo_id", ""), {})
-        ev["grupo_nombre"]  = g.get("nombre", "—")
-        ev["grupo_id"]      = g.get("id", "")
-        ev["rut_empresa"]   = g.get("rut_empresa", "")
+        ev["grupo_nombre"]   = g.get("nombre", "—")
+        ev["grupo_id"]       = g.get("id", "")
+        ev["rut_empresa"]    = g.get("rut_empresa", "")
+        ev["empresa_nombre"] = empresa_map.get(g.get("rut_empresa") or "", "") or "—"
     return evaluadores
 
 
 @con_reintento
 def listar_evaluadores_por_grupo(grupo_id):
-    """Lista todos los evaluadores de un grupo."""
+    """Lista todos los evaluadores de un grupo.
+    2 queries fijas en lugar de 1+N (una por participante).
+    """
     participantes = listar_participantes(grupo_id)
-    evaluadores = []
-    for p in participantes:
-        evs = listar_evaluadores(p["id"])
-        for ev in evs:
-            ev["participante_nombre"] = p["nombre"]
-            ev["participante_email"] = p["email"]
-            ev["participante_id_ref"] = p["id"]
-        evaluadores.extend(evs)
-    return evaluadores
+    if not participantes:
+        return []
+    part_map = {p["id"]: p for p in participantes}
+    sb = get_client()
+    evs = sb.table("v2_evaluadores").select("*").in_(
+        "participante_id", list(part_map.keys())
+    ).order("created_at").execute().data or []
+    for ev in evs:
+        p = part_map.get(ev["participante_id"], {})
+        ev["participante_nombre"] = p.get("nombre", "")
+        ev["participante_email"]  = p.get("email", "")
+        ev["participante_id_ref"] = p.get("id")
+    return evs
 
 
 @con_reintento
 def obtener_evaluador_por_token(token):
-    """Obtiene un evaluador por su token, con datos del participante y grupo."""
+    """Obtiene un evaluador por su token, con datos del participante y grupo.
+    1 query con joins anidados en lugar de 3 queries en cadena.
+    """
     sb = get_client()
-    res = sb.table("v2_evaluadores").select("*").eq("token", token).execute()
+    res = sb.table("v2_evaluadores").select(
+        "*, v2_participantes(*, sist_personas(pers_nombres, pers_apellidos, pers_correo), v2_grupos(*))"
+    ).eq("token", token).execute()
     if not res.data:
         return None
     evaluador = res.data[0]
-    part_res = sb.table("v2_participantes").select(
-        "*, sist_personas(pers_nombres, pers_apellidos, pers_correo)"
-    ).eq("id", evaluador["participante_id"]).execute()
-    if part_res.data:
-        participante = _enriquecer_participante(part_res.data[0])
-        grupo_res = sb.table("v2_grupos").select("*").eq("id", participante["grupo_id"]).execute()
-        if grupo_res.data:
-            participante["v2_grupos"] = grupo_res.data[0]
+    part_raw = evaluador.pop("v2_participantes", None)
+    if part_raw:
+        participante = _enriquecer_participante(part_raw)
+        # v2_grupos queda embebido; _enriquecer_participante no lo toca
         evaluador["v2_participantes"] = participante
     return evaluador
 
