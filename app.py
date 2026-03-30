@@ -692,6 +692,20 @@ def pagina_grupos():
                     errores_n.append("Ingresa un nombre de grupo.")
                 if personas_n and len(seleccionados_n) == 0:
                     errores_n.append("Selecciona al menos un participante.")
+                # Verificar duplicado: mismo nombre + plantilla + empresa
+                if not errores_n and nombre_n.strip():
+                    grupos_exist = queries.listar_grupos()
+                    for g in grupos_exist:
+                        if (
+                            g.get("nombre", "").strip().lower() == nombre_n.strip().lower()
+                            and str(g.get("plantilla_id", "")) == str(plantilla_sel_n["id"] if plantilla_sel_n else "")
+                            and str(g.get("rut_empresa") or "") == str(rut_empresa_n or "")
+                        ):
+                            errores_n.append(
+                                f"Ya existe un grupo con el nombre '{nombre_n.strip()}', la misma plantilla y empresa. "
+                                "Cambia el nombre (ej: agrega el año o período)."
+                            )
+                            break
                 if errores_n:
                     for e in errores_n:
                         st.warning(e)
@@ -702,9 +716,13 @@ def pagina_grupos():
                         for idx in seleccionados_n:
                             queries.crear_participante(gid, rows_n[idx]["RUT"])
                         st.success(f"✅ Grupo '{nombre_n.strip()}' creado con {len(seleccionados_n)} participante(s).")
+                        # Limpiar formulario
+                        for _k in ["ng_nombre", "ng_empresa", "ng_plantilla",
+                                   f"ng_editor_{rut_empresa_n or 'todos'}"]:
+                            st.session_state.pop(_k, None)
                         st.rerun()
                     except Exception as e:
-                        st.error(f"Error: {e}")
+                        st.error(f"Error al crear el grupo: {e}")
 
     with tab_lista:
         import pandas as pd
