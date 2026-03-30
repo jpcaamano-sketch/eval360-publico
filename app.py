@@ -1345,6 +1345,12 @@ def pagina_seguimiento_feedback():
 
     df = pd.DataFrame(rows)
 
+    # Limpiar key si el estado guardado no coincide con las columnas actuales
+    if "fb_tabla_editor" in st.session_state:
+        _cached = st.session_state["fb_tabla_editor"]
+        if hasattr(_cached, "columns") and "Recordatorio" not in _cached.columns:
+            st.session_state.pop("fb_tabla_editor", None)
+
     edited_df = st.data_editor(
         df,
         column_config={
@@ -1364,6 +1370,10 @@ def pagina_seguimiento_feedback():
         use_container_width=True,
         key="fb_tabla_editor",
     )
+
+    if "Recordatorio" not in edited_df.columns:
+        st.session_state.pop("fb_tabla_editor", None)
+        st.rerun()
 
     seleccionados_idx = edited_df.index[edited_df["Recordatorio"] == True].tolist()
     n_sel = len(seleccionados_idx)
