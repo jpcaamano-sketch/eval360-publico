@@ -125,20 +125,20 @@ for idx, comp in enumerate(competencias_shuffle, 1):
 st.divider()
 
 # ============================================================
-# SECCIÓN DE EVALUADORES (3 a 5)
+# SECCIÓN DE EVALUADORES (5 obligatorios + 3 opcionales = 8)
 # ============================================================
 
 st.subheader("Evaluadores")
 st.markdown(
-    "Ingresa entre **3 y 5** personas que te evaluarán. "
+    "Ingresa entre **5 y 8** personas que te evaluarán. "
     "Deben ser colegas, supervisores o colaboradores que te conozcan bien."
 )
 
-NUM_EVAL_SLOTS = 5
+NUM_EVAL_SLOTS = 8
 evaluadores_data = []
 
 for i in range(NUM_EVAL_SLOTS):
-    obligatorio = " *(obligatorio)*" if i < 3 else " *(opcional)*"
+    obligatorio = " *(obligatorio)*" if i < 5 else " *(opcional)*"
     st.markdown(f"**Evaluador {i + 1}**{obligatorio}")
     col1, col2 = st.columns(2)
     with col1:
@@ -162,8 +162,8 @@ if st.button("Guardar Autoevaluación", use_container_width=True, type="primary"
     if not todas_respondidas or len(respuestas) < len(competencias):
         errores.append("Debes responder todas las competencias.")
 
-    if len(evaluadores_data) < 3:
-        errores.append("¡¡Falta nombres de colaboradores!! Debes ingresar al menos 3 evaluadores.")
+    if len(evaluadores_data) < 5:
+        errores.append("¡¡Falta nombres de colaboradores!! Debes ingresar al menos 5 evaluadores.")
 
     if errores:
         for err in errores:
