@@ -400,6 +400,37 @@ def listar_evaluadores(participante_id):
 
 
 @con_reintento
+def listar_todos_evaluadores_bulk():
+    """Devuelve todos los evaluadores con datos de participante y grupo en 3 queries."""
+    sb = get_client()
+    # 1. Todos los evaluadores
+    evs_res = sb.table("v2_evaluadores").select("*").order("created_at").execute()
+    evaluadores = evs_res.data or []
+    if not evaluadores:
+        return []
+    # 2. Todos los participantes
+    parts_res = sb.table("v2_participantes").select(
+        "*, sist_personas(pers_nombres, pers_apellidos, pers_correo)"
+    ).execute()
+    partic_map = {p["id"]: _enriquecer_participante(p) for p in (parts_res.data or [])}
+    # 3. Todos los grupos
+    grps_res = sb.table("v2_grupos").select("id, nombre, rut_empresa").execute()
+    grupo_map = {g["id"]: g for g in (grps_res.data or [])}
+    # Enriquecer evaluadores
+    for ev in evaluadores:
+        p = partic_map.get(ev["participante_id"], {})
+        ev["participante_nombre"] = p.get("nombre", "")
+        ev["participante_email"]  = p.get("email", "")
+        ev["autoevaluacion_completada"] = p.get("autoevaluacion_completada", False)
+        ev["participante_obj"]    = p
+        g = grupo_map.get(p.get("grupo_id", ""), {})
+        ev["grupo_nombre"]  = g.get("nombre", "—")
+        ev["grupo_id"]      = g.get("id", "")
+        ev["rut_empresa"]   = g.get("rut_empresa", "")
+    return evaluadores
+
+
+@con_reintento
 def listar_evaluadores_por_grupo(grupo_id):
     """Lista todos los evaluadores de un grupo."""
     participantes = listar_participantes(grupo_id)

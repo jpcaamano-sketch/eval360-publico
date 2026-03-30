@@ -1271,32 +1271,30 @@ def pagina_seguimiento_feedback():
     import pandas as pd
     st.header("Seguimiento Feedback")
 
-    grupos = queries.listar_grupos()
-    if not grupos:
-        st.info("No hay grupos creados.")
-        return
-
-    # Recopilar todas las filas: grupo → participante → evaluador
-    filas = []
-    for g in grupos:
-        participantes = queries.listar_participantes(g["id"])
-        for p in participantes:
-            if not p["autoevaluacion_completada"]:
-                continue
-            evaluadores = queries.listar_evaluadores(p["id"])
-            for ev in evaluadores:
-                filas.append({
-                    "grupo_nombre": g["nombre"],
-                    "participante_nombre": p["nombre"],
-                    "evaluador": ev,
-                    "participante": p,
-                })
-
-    if not filas:
+    # Una sola llamada bulk en lugar de N×M queries
+    todos_ev = queries.listar_todos_evaluadores_bulk()
+    if not todos_ev:
         st.info("No hay evaluadores registrados aún.")
         return
 
+    # Solo evaluadores de participantes que completaron autoevaluación
+    filas = [
+        {
+            "grupo_nombre": ev["grupo_nombre"],
+            "participante_nombre": ev["participante_nombre"],
+            "evaluador": ev,
+            "participante": ev.get("participante_obj", {}),
+        }
+        for ev in todos_ev
+        if ev.get("autoevaluacion_completada")
+    ]
+
+    if not filas:
+        st.info("No hay evaluadores registrados aún (o ningún participante completó su autoevaluación).")
+        return
+
     # Filtros: Empresa → Grupo
+    grupos = queries.listar_grupos()
     empresa_a_grupos = {}
     for g in grupos:
         emp = g.get("empresa") or "—"
