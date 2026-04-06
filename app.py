@@ -312,6 +312,7 @@ MENU_OPTIONS = [
     "Seguimiento Feedback",
     "Informe Final 360",
     "Plan Desarrollo Individual",
+    "PDI desde 3 competencias",
     "Cuestionario Complementario",
     "Ingresos Especiales",
 ]
@@ -4019,6 +4020,189 @@ def pagina_pdi():
 
 
 # ============================================================
+# PDI MANUAL (3 competencias ingresadas a mano)
+# ============================================================
+
+def _generar_pdi_ia_manual(nombre, competencias):
+    """Genera PDI con metodología 70-20-10 a partir de 3 competencias ingresadas manualmente."""
+    lista = "\n".join(f"{i+1}. {c}" for i, c in enumerate(competencias))
+
+    prompt = f"""Eres un coach experto en desarrollo de liderazgo y evaluaciones 360°.
+Genera un Plan de Desarrollo Individual (PDI) completo en español para {nombre}, utilizando la metodología 70-20-10.
+
+LAS 3 COMPETENCIAS A TRABAJAR (definidas por el evaluador):
+{lista}
+
+INSTRUCCIONES:
+Genera un PDI estructurado con exactamente 3 secciones, una por cada competencia. Para cada una incluye:
+
+1. **Por qué es importante**: Explica el impacto concreto de esta competencia en el liderazgo y en los resultados del equipo.
+
+2. **Meta de Desarrollo**: Define una meta específica, observable y alcanzable.
+
+3. **70% — Aprendizaje en Terreno**: 2 acciones concretas que {nombre} debe practicar en su día a día laboral. Sé específico con situaciones reales (reuniones, conversaciones, proyectos).
+
+4. **20% — Aprendizaje Social**: 1 acción que involucra aprendizaje con otros (pedir feedback, role-playing, mentoring, observación de referentes).
+
+5. **10% — Aprendizaje Formal**: 1 recurso concreto (lectura, taller, micro-learning, metodología específica).
+
+IMPORTANTE:
+- Personaliza con el nombre {nombre} en las acciones concretas.
+- Tono: profesional, directo y constructivo.
+- Usa markdown: ## para titular cada competencia, **negrita** para los subtítulos 70/20/10.
+- Escribe en tercera persona."""
+
+    genai.configure(api_key=GOOGLE_API_KEY)
+    model = genai.GenerativeModel("gemini-2.5-flash")
+    response = model.generate_content(prompt)
+    _log_gemini("Evaluacion360", "gemini-2.5-flash", response, "PDI_manual")
+    return response.text
+
+
+def _generar_word_pdi_manual(nombre, competencias, texto_pdi):
+    """Genera Word del PDI manual (sin tabla de puntajes)."""
+    import re
+    doc = Document()
+
+    titulo = doc.add_heading("PLAN DE DESARROLLO INDIVIDUAL", level=0)
+    titulo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    doc.add_paragraph(f"Participante: {nombre}")
+    doc.add_paragraph(f"Fecha: {datetime.now(timezone.utc).strftime('%d/%m/%Y')}")
+    doc.add_paragraph(f"Metodología: 70-20-10 (Experiencia · Exposición · Educación)")
+
+    doc.add_heading("Competencias a Desarrollar", level=1)
+    for i, comp in enumerate(competencias, 1):
+        doc.add_paragraph(f"{i}. {comp}", style="List Number")
+
+    doc.add_paragraph("")
+    doc.add_heading("Plan de Desarrollo", level=1)
+
+    for line in texto_pdi.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            doc.add_paragraph("")
+            continue
+        if stripped.startswith("### "):
+            doc.add_heading(stripped[4:], level=3)
+        elif stripped.startswith("## "):
+            doc.add_heading(stripped[3:], level=2)
+        elif stripped.startswith("# "):
+            doc.add_heading(stripped[2:], level=1)
+        else:
+            p = doc.add_paragraph()
+            parts = re.split(r"\*\*(.+?)\*\*", stripped)
+            for idx, part in enumerate(parts):
+                if idx % 2 == 1:
+                    run = p.add_run(part)
+                    run.bold = True
+                else:
+                    p.add_run(part.replace("*", ""))
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    return buf
+
+
+def pagina_pdi_manual():
+    st.header("PDI desde 3 competencias específicas")
+    st.caption("Ingresa manualmente las 3 competencias a desarrollar y genera el Plan con IA.")
+
+    if not GOOGLE_API_KEY:
+        st.warning("Falta configurar la API Key de Google AI.")
+        return
+
+    grupos = queries.listar_grupos()
+    if not grupos:
+        st.info("No hay grupos creados.")
+        return
+
+    col_emp, col_grp, col_part = st.columns(3)
+
+    empresas = sorted({g.get("empresa") or "—" for g in grupos})
+    empresa_sel = col_emp.selectbox("Empresa", options=empresas, key="pdim_empresa")
+
+    grupos_filtrados = [g for g in grupos if (g.get("empresa") or "—") == empresa_sel]
+    grupo_sel = col_grp.selectbox(
+        "Programa", options=grupos_filtrados,
+        format_func=lambda g: g["nombre"], key="pdim_grupo",
+    )
+    if not grupo_sel:
+        return
+
+    participantes = queries.listar_participantes(grupo_sel["id"])
+    participantes_validos = sorted(
+        participantes,
+        key=lambda p: (p.get("pers_apellidos") or p.get("nombre") or "").lower(),
+    )
+    if not participantes_validos:
+        col_part.markdown("&nbsp;")
+        st.info("No hay participantes en este grupo.")
+        return
+
+    part_sel = col_part.selectbox(
+        "Nombre",
+        options=participantes_validos,
+        format_func=lambda p: p["nombre"],
+        key="pdim_part",
+    )
+    if not part_sel:
+        return
+
+    # Limpiar PDI anterior si cambió el participante
+    if st.session_state.get("_pdim_part_anterior") != part_sel["id"]:
+        st.session_state.pop("pdi_manual_360", None)
+        st.session_state["_pdim_part_anterior"] = part_sel["id"]
+
+    st.divider()
+    st.subheader("Competencias a desarrollar")
+    st.caption("Escribe el nombre de las 3 competencias específicas que se trabajarán en el PDI.")
+
+    comp1 = st.text_input("Competencia 1", key="pdim_c1", placeholder="Ej: Comunicación efectiva")
+    comp2 = st.text_input("Competencia 2", key="pdim_c2", placeholder="Ej: Delegación y seguimiento")
+    comp3 = st.text_input("Competencia 3", key="pdim_c3", placeholder="Ej: Gestión del cambio")
+
+    competencias = [c.strip() for c in [comp1, comp2, comp3] if c.strip()]
+    if len(competencias) < 3:
+        st.info("Ingresa las 3 competencias para habilitar la generación del PDI.")
+        return
+
+    st.divider()
+
+    if st.button("Generar Plan de Desarrollo Individual", type="primary", use_container_width=True, key="btn_gen_pdim"):
+        with st.spinner("Generando PDI con IA..."):
+            try:
+                texto_pdi = _generar_pdi_ia_manual(part_sel["nombre"], competencias)
+                st.session_state["pdi_manual_360"] = {
+                    "texto":        texto_pdi,
+                    "nombre":       part_sel["nombre"],
+                    "competencias": competencias,
+                }
+            except Exception as e:
+                st.error(f"Error al generar PDI: {e}")
+                return
+
+    if "pdi_manual_360" not in st.session_state:
+        return
+
+    pdi = st.session_state["pdi_manual_360"]
+    st.divider()
+    st.markdown(f"## Plan de Desarrollo Individual — {pdi['nombre']}")
+    st.markdown(pdi["texto"])
+
+    st.divider()
+    buf_word = _generar_word_pdi_manual(pdi["nombre"], pdi["competencias"], pdi["texto"])
+    st.download_button(
+        "Descargar PDI en Word",
+        data=buf_word,
+        file_name=f"PDI_{pdi['nombre'].replace(' ', '_')}.docx",
+        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        use_container_width=True,
+        key="dl_pdim",
+    )
+
+
+# ============================================================
 # ROUTER
 # ============================================================
 
@@ -4040,5 +4224,7 @@ elif menu == "Informe Final 360":
     pagina_informe_final()
 elif menu == "Plan Desarrollo Individual":
     pagina_pdi()
+elif menu == "PDI desde 3 competencias":
+    pagina_pdi_manual()
 elif menu == "Cuestionario Complementario":
     pagina_cuestionario_complementario()
