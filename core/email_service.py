@@ -1,23 +1,17 @@
 """Servicio de envío de emails para Evaluación 360 v2."""
 
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from core.config import SMTP_SERVER, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, APP_AUTO_URL, APP_FEEDBACK_URL
+import resend
+from core.config import RESEND_API_KEY, FROM_EMAIL, APP_AUTO_URL, APP_FEEDBACK_URL
 
 
-def _enviar_email(destinatario, asunto, cuerpo_html):
-    """Envía un email HTML."""
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = asunto
-    msg["From"] = f"Evaluación 360 <{SMTP_USER}>"
-    msg["To"] = destinatario
-    msg.attach(MIMEText(cuerpo_html, "html"))
-
-    with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-        server.starttls()
-        server.login(SMTP_USER, SMTP_PASSWORD)
-        server.sendmail(SMTP_USER, destinatario, msg.as_string())
+def _enviar_email(destinatario: str, asunto: str, cuerpo_html: str):
+    resend.api_key = RESEND_API_KEY
+    resend.Emails.send({
+        "from": FROM_EMAIL,
+        "to": [destinatario],
+        "subject": asunto,
+        "html": cuerpo_html,
+    })
 
 
 def enviar_invitacion_autoevaluacion(participante):
@@ -87,12 +81,12 @@ def enviar_recordatorio_autoevaluacion(participante):
     link = f"{APP_AUTO_URL}/?token={participante['token_auto']}"
     nombre = f"{participante.get('pers_nombres', '')} {participante.get('pers_apellidos', '')}".strip() or participante.get('nombre', '')
     email = participante.get('pers_correo') or participante.get('email', '')
-    asunto = "⏰ Recordatorio — Autoevaluación 360° pendiente"
+    asunto = "Recordatorio — Autoevaluación 360° pendiente"
     cuerpo = f"""
     <html>
     <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background-color: #e65100; color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0;">
-            <h1 style="margin: 0;">⏰ Recordatorio</h1>
+            <h1 style="margin: 0;">Recordatorio</h1>
         </div>
         <div style="padding: 30px; background-color: #f8f9fa; border-radius: 0 0 10px 10px;">
             <p>Hola <strong>{nombre}</strong>,</p>
@@ -115,12 +109,12 @@ def enviar_recordatorio_autoevaluacion(participante):
 def enviar_recordatorio_feedback(evaluador, participante_nombre):
     """Envía recordatorio de feedback."""
     link = f"{APP_FEEDBACK_URL}/?token={evaluador['token']}"
-    asunto = f"⏰ Recordatorio — Feedback 360° pendiente para {participante_nombre}"
+    asunto = f"Recordatorio — Feedback 360° pendiente para {participante_nombre}"
     cuerpo = f"""
     <html>
     <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background-color: #e65100; color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0;">
-            <h1 style="margin: 0;">⏰ Recordatorio</h1>
+            <h1 style="margin: 0;">Recordatorio</h1>
         </div>
         <div style="padding: 30px; background-color: #f8f9fa; border-radius: 0 0 10px 10px;">
             <p>Hola <strong>{evaluador['nombre']}</strong>,</p>
