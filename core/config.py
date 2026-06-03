@@ -19,9 +19,9 @@ ADMIN_PASSWORD = _cfg("ADMIN_PASSWORD")
 GOOGLE_API_KEY = _cfg("GOOGLE_API_KEY", "")
 
 # URLs de las aplicaciones (configuradas como variables de entorno en Railway)
-APP_AUTO_URL     = _cfg("APP_AUTO_URL",     "http://localhost:8507")
-APP_FEEDBACK_URL = _cfg("APP_FEEDBACK_URL", "http://localhost:8508")
-APP_CC_URL       = _cfg("APP_CC_URL",       "http://localhost:8509")
+APP_AUTO_URL     = _cfg("APP_AUTO_URL",     "https://eval360-publico-production.up.railway.app")
+APP_FEEDBACK_URL = _cfg("APP_FEEDBACK_URL", "https://eval360-publico-production.up.railway.app")
+APP_CC_URL       = _cfg("APP_CC_URL",       "https://eval360-publico-production.up.railway.app")
 
 # Escala de evaluación
 ESCALA = {
